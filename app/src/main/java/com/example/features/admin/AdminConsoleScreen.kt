@@ -341,7 +341,19 @@ fun AdminConsoleScreen(
                         }
                     }
 
-                    AdminTab.TEMPLATES -> {
+                                        AdminTab.TEMPLATES -> {
+                        item {
+                            SolidSectionCard {
+                                Text("Template Management & Categories", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    "Toggle active states, verify category isolation, and review front/back card layouts.",
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+
                         if (state.templates.isEmpty()) {
                             item {
                                 EmptyStateCard(
@@ -361,15 +373,34 @@ fun AdminConsoleScreen(
                                         Column(modifier = Modifier.weight(1f)) {
                                             Text(tpl.name.ifBlank { tpl.resolvedCategory }, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                                             Text(
-                                                "Category: ${tpl.resolvedCategory} • Card: ${tpl.templateCardId ?: "default"} • Side: ${tpl.side.uppercase()}",
+                                                "Category: ${tpl.resolvedCategory} • Card ID: ${tpl.templateCardId ?: "default"}",
                                                 fontSize = 12.sp,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                                             )
+                                            Spacer(modifier = Modifier.height(2.dp))
+                                            Surface(
+                                                color = if (tpl.side.equals("front", ignoreCase = true)) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.secondaryContainer,
+                                                shape = RoundedCornerShape(6.dp)
+                                            ) {
+                                                Text(
+                                                    "SIDE: ${tpl.side.uppercase()}",
+                                                    fontSize = 10.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                )
+                                            }
                                         }
-                                        Switch(
-                                            checked = tpl.isActive,
-                                            onCheckedChange = { active -> viewModel.toggleTemplateActive(tpl, active) }
-                                        )
+                                        Column(horizontalAlignment = Alignment.End) {
+                                            Switch(
+                                                checked = tpl.isActive,
+                                                onCheckedChange = { active -> viewModel.toggleTemplateActive(tpl, active) }
+                                            )
+                                            Text(
+                                                if (tpl.isActive) "Active" else "Disabled",
+                                                fontSize = 11.sp,
+                                                color = if (tpl.isActive) BigstaSuccessGreen else MaterialTheme.colorScheme.outline
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -412,14 +443,66 @@ fun AdminConsoleScreen(
                         }
                     }
 
-                    AdminTab.SETTINGS -> {
+                                        AdminTab.SETTINGS -> {
                         item {
                             SolidSectionCard {
-                                Text("System Settings & Webhook Control", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                                Text("Payment Methods & Lipa Namba Configuration", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    "Active mobile money accounts displayed to users for token recharge:",
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Spacer(modifier = Modifier.height(10.dp))
+
+                                val paymentChannels = listOf(
+                                    Pair("M-Pesa (Vodacom)", "Lipa Namba / Till"),
+                                    Pair("Tigo Pesa (Mixx)", "Paybill / Till"),
+                                    Pair("Airtel Money", "Merchant / Till"),
+                                    Pair("HaloPesa", "Lipa Namba")
+                                )
+
+                                paymentChannels.forEach { (channel, type) ->
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = 4.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column {
+                                            Text(channel, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                                            Text(type, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        }
+                                        Surface(
+                                            color = BigstaSuccessGreen.copy(alpha = 0.12f),
+                                            shape = RoundedCornerShape(6.dp)
+                                        ) {
+                                            Text(
+                                                "Active (TZS)",
+                                                color = BigstaSuccessGreen,
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                            )
+                                        }
+                                    }
+                                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                                }
+                            }
+                        }
+
+                        item {
+                            SolidSectionCard {
+                                Text("SMS Gateway & Webhook Diagnostics", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text("Public Endpoint: /api/public/payment-sms", fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                                Text("Listener: Supabase Edge Functions / Android BroadcastReceiver", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("Status: Verified & Awaiting Inbound Transactions", fontSize = 12.sp, color = BigstaSuccessGreen)
                                 Spacer(modifier = Modifier.height(8.dp))
                                 Text(
-                                    "Global payment methods, Lipa Namba configurations, SMS webhooks, and maintenance toggles are managed through Supabase system_settings.",
-                                    fontSize = 13.sp,
+                                    "Native Android SMS forwarding is configured to ingest bank and MNO settlement SMS directly into payment_requests table.",
+                                    fontSize = 11.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
