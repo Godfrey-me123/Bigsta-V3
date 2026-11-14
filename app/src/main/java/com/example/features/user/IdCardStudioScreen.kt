@@ -22,10 +22,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.PhotoLibrary
-import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -55,14 +52,33 @@ fun IdCardStudioScreen(
     val context = LocalContext.current
     val cachedTemplates by viewModel.cachedTemplates.collectAsStateWithLifecycle()
 
-    val categories = listOf("NIDA", "Driving Licence", "NHIF", "NRC Zambia", "Passport Badge")
+    val categories = listOf("NIDA", "Driving Licence", "NHIF", "NRC Zambia", "Employee Badge")
     var selectedCategory by remember { mutableStateOf("NIDA") }
-    var selectedSide by remember { mutableStateOf("front") } // Independent front/back side state
+    var selectedSide by remember { mutableStateOf("front") }
 
-    var fullName by remember { mutableStateOf("Amina Juma") }
+    // Core ID card fields
+    var fullName by remember { mutableStateOf("AMINA JUMA HASSAN") }
     var idNumber by remember { mutableStateOf("19950612-14102-00001-22") }
     var dateOfBirth by remember { mutableStateOf("1995-06-12") }
-    var issuingAuthority by remember { mutableStateOf("National Identification Authority") }
+    var gender by remember { mutableStateOf("Female") }
+    var nationality by remember { mutableStateOf("Tanzanian") }
+
+    // Driving licence specific
+    var bloodGroup by remember { mutableStateOf("O+") }
+    var licenceClasses by remember { mutableStateOf("A, B, D") }
+    var expiryDate by remember { mutableStateOf("2029-06-12") }
+
+    // NHIF specific
+    var facilityCode by remember { mutableStateOf("TZ-DAR-001 (Muhimbili)") }
+    var memberType by remember { mutableStateOf("Principal Member") }
+
+    // NRC Zambia specific
+    var nrcProvince by remember { mutableStateOf("Lusaka Province") }
+
+    // Back side fields
+    var issuingAuthority by remember { mutableStateOf("National Identification Authority (NIDA)") }
+    var cardNotice by remember { mutableStateOf("This card is property of the Government. If found, please return to the nearest police station.") }
+
     var photoBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var exportFeedback by remember { mutableStateOf<String?>(null) }
     var lastExportedFile by remember { mutableStateOf<File?>(null) }
@@ -87,66 +103,210 @@ fun IdCardStudioScreen(
         }
     }
 
-    fun renderAndSaveCard(): File? {
-        return runCatching {
-            val width = 1012
-            val height = 638
-            val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-            val canvas = Canvas(bitmap)
+    fun renderCard(side: String): Bitmap {
+        val width = 1012
+        val height = 638
+        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
 
-            // Clean solid card surface
-            canvas.drawColor(android.graphics.Color.WHITE)
+        canvas.drawColor(android.graphics.Color.WHITE)
 
-            val headerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = android.graphics.Color.rgb(24, 24, 27)
+        val headerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = when (selectedCategory) {
+                "Driving Licence" -> android.graphics.Color.rgb(20, 83, 45) // Deep Green
+                "NHIF" -> android.graphics.Color.rgb(30, 58, 138) // Deep Blue
+                "NRC Zambia" -> android.graphics.Color.rgb(180, 83, 9) // Amber/Copper
+                "Employee Badge" -> android.graphics.Color.rgb(127, 29, 29) // Deep Maroon
+                else -> android.graphics.Color.rgb(24, 24, 27) // Dark Zinc for NIDA
             }
-            canvas.drawRect(0f, 0f, width.toFloat(), 110f, headerPaint)
+        }
+        canvas.drawRect(0f, 0f, width.toFloat(), 110f, headerPaint)
 
-            val titlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = android.graphics.Color.WHITE
-                textSize = 34f
-                isFakeBoldText = true
-            }
-            canvas.drawText(
-                "${selectedCategory.uppercase()} — ${selectedSide.uppercase()}",
-                36f,
-                68f,
-                titlePaint
-            )
+        val headerTitlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = android.graphics.Color.WHITE
+            textSize = 30f
+            isFakeBoldText = true
+        }
+        val headerSubPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = android.graphics.Color.rgb(228, 228, 231)
+            textSize = 18f
+        }
 
-            val bodyPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = android.graphics.Color.rgb(20, 20, 20)
-                textSize = 32f
-                isFakeBoldText = true
-            }
-            val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = android.graphics.Color.rgb(90, 90, 90)
-                textSize = 24f
-            }
+        val title = when (selectedCategory) {
+            "Driving Licence" -> "LESENI YA UDEREVA • DRIVING LICENCE"
+            "NHIF" -> "NATIONAL HEALTH INSURANCE FUND • NHIF"
+            "NRC Zambia" -> "REPUBLIC OF ZAMBIA • NATIONAL REGISTRATION CARD"
+            "Employee Badge" -> "CORPORATE STAFF IDENTITY BADGE"
+            else -> "JAMHURI YA MUUNGANO WA TANZANIA • NIDA"
+        }
+        canvas.drawText(title, 36f, 56f, headerTitlePaint)
+        canvas.drawText("CR80 COMPLIANT SPECIFICATION — SIDE: ${side.uppercase()}", 36f, 92f, headerSubPaint)
 
-            if (selectedSide == "front") {
-                val photoRect = RectF(36f, 150f, 276f, 440f)
-                val photoBg = Paint().apply { color = android.graphics.Color.rgb(230, 230, 235) }
-                canvas.drawRoundRect(photoRect, 14f, 14f, photoBg)
-                photoBitmap?.let { bmp ->
-                    canvas.drawBitmap(bmp, null, photoRect, null)
+        val bodyPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = android.graphics.Color.rgb(24, 24, 27)
+            textSize = 28f
+            isFakeBoldText = true
+        }
+        val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = android.graphics.Color.rgb(113, 113, 122)
+            textSize = 20f
+        }
+
+        if (side == "front") {
+            // Photo Frame Box
+            val photoRect = RectF(36f, 140f, 286f, 480f)
+            val photoBg = Paint().apply { color = android.graphics.Color.rgb(244, 244, 245) }
+            canvas.drawRoundRect(photoRect, 14f, 14f, photoBg)
+            val photoBorder = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                style = Paint.Style.STROKE
+                strokeWidth = 2.5f
+                color = android.graphics.Color.rgb(212, 212, 216)
+            }
+            canvas.drawRoundRect(photoRect, 14f, 14f, photoBorder)
+
+            photoBitmap?.let { bmp ->
+                canvas.drawBitmap(bmp, null, photoRect, null)
+            } ?: run {
+                val placeholderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = android.graphics.Color.GRAY
+                    textSize = 22f
                 }
-                canvas.drawText("FULL NAME", 316f, 185f, labelPaint)
-                canvas.drawText(fullName, 316f, 228f, bodyPaint)
-                canvas.drawText("DOCUMENT / ID NUMBER", 316f, 295f, labelPaint)
-                canvas.drawText(idNumber, 316f, 338f, bodyPaint)
-                canvas.drawText("DATE OF BIRTH", 316f, 405f, labelPaint)
-                canvas.drawText(dateOfBirth, 316f, 448f, bodyPaint)
-            } else {
-                canvas.drawText("ISSUING AUTHORITY", 44f, 195f, labelPaint)
-                canvas.drawText(issuingAuthority, 44f, 240f, bodyPaint)
-                canvas.drawText("CARD REFERENCE", 44f, 315f, labelPaint)
-                canvas.drawText(idNumber, 44f, 360f, bodyPaint)
-                canvas.drawText("HOLDER: $fullName", 44f, 450f, labelPaint)
+                canvas.drawText("PASSPORT PHOTO", 54f, 310f, placeholderPaint)
             }
 
+            // Data Columns
+            val leftCol = 320f
+            var curY = 175f
+
+            canvas.drawText("FULL NAME / JINA KAMILI", leftCol, curY, labelPaint)
+            curY += 34f
+            canvas.drawText(fullName.uppercase(), leftCol, curY, bodyPaint)
+
+            curY += 50f
+            canvas.drawText("CARD / NATIONAL ID NUMBER", leftCol, curY, labelPaint)
+            curY += 34f
+            canvas.drawText(idNumber, leftCol, curY, bodyPaint)
+
+            curY += 50f
+            canvas.drawText("DATE OF BIRTH • GENDER", leftCol, curY, labelPaint)
+            curY += 34f
+            canvas.drawText("$dateOfBirth • ${gender.uppercase()}", leftCol, curY, bodyPaint)
+
+            curY += 50f
+            when (selectedCategory) {
+                "Driving Licence" -> {
+                    canvas.drawText("CLASSES • BLOOD GROUP • EXPIRY", leftCol, curY, labelPaint)
+                    curY += 34f
+                    canvas.drawText("CLASS: $licenceClasses | BG: $bloodGroup | EXP: $expiryDate", leftCol, curY, bodyPaint)
+                }
+                "NHIF" -> {
+                    canvas.drawText("FACILITY CODE • CATEGORY", leftCol, curY, labelPaint)
+                    curY += 34f
+                    canvas.drawText("$facilityCode • $memberType", leftCol, curY, bodyPaint)
+                }
+                "NRC Zambia" -> {
+                    canvas.drawText("PROVINCE • NATIONALITY", leftCol, curY, labelPaint)
+                    curY += 34f
+                    canvas.drawText("$nrcProvince • Zambian Citizen", leftCol, curY, bodyPaint)
+                }
+                else -> {
+                    canvas.drawText("NATIONALITY / URAIA", leftCol, curY, labelPaint)
+                    curY += 34f
+                    canvas.drawText(nationality.uppercase(), leftCol, curY, bodyPaint)
+                }
+            }
+
+            // Bottom Barcode Stripe
+            val barY = 530f
+            val barH = 70f
+            val barW = 600f
+            val barPaint = Paint().apply { color = android.graphics.Color.BLACK }
+            val barCount = 48
+            val step = barW / barCount
+            for (i in 0 until barCount) {
+                val bw = if (i % 3 == 0 || i % 5 == 0) step * 0.75f else step * 0.35f
+                canvas.drawRect(leftCol + i * step, barY, leftCol + i * step + bw, barY + barH - 18f, barPaint)
+            }
+            val codeNumPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = android.graphics.Color.DKGRAY
+                textSize = 16f
+                isFakeBoldText = true
+            }
+            canvas.drawText(idNumber.replace("-", ""), leftCol + 10f, barY + barH, codeNumPaint)
+
+        } else {
+            // Back Side
+            var curY = 175f
+
+            canvas.drawText("ISSUING AUTHORITY / MAMLAKA ILIYOIDHINISHA", 44f, curY, labelPaint)
+            curY += 36f
+            canvas.drawText(issuingAuthority.uppercase(), 44f, curY, bodyPaint)
+
+            curY += 60f
+            canvas.drawText("TERMS & CONDITIONS OF USE", 44f, curY, labelPaint)
+            curY += 32f
+            val noticePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = android.graphics.Color.rgb(82, 82, 91)
+                textSize = 21f
+            }
+            canvas.drawText(cardNotice, 44f, curY, noticePaint)
+
+            curY += 60f
+            canvas.drawText("HOLDER IDENTIFIER", 44f, curY, labelPaint)
+            curY += 34f
+            canvas.drawText("$fullName • ID: $idNumber", 44f, curY, bodyPaint)
+
+            // Signature Box
+            val sigRect = RectF(44f, 440f, 440f, 570f)
+            val sigBg = Paint().apply { color = android.graphics.Color.rgb(250, 250, 250) }
+            canvas.drawRoundRect(sigRect, 8f, 8f, sigBg)
+            val sigBorder = Paint().apply {
+                style = Paint.Style.STROKE
+                strokeWidth = 2f
+                color = android.graphics.Color.rgb(212, 212, 216)
+            }
+            canvas.drawRoundRect(sigRect, 8f, 8f, sigBorder)
+
+            // Signature line
+            val sigLine = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = android.graphics.Color.rgb(30, 58, 138)
+                strokeWidth = 2.5f
+            }
+            canvas.drawLine(64f, 510f, 180f, 480f, sigLine)
+            canvas.drawLine(180f, 480f, 260f, 520f, sigLine)
+            canvas.drawLine(260f, 520f, 400f, 490f, sigLine)
+
+            val sigText = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = android.graphics.Color.GRAY
+                textSize = 15f
+            }
+            canvas.drawText("AUTHORIZED SIGNATURE / SAHIHI YA MMILIKI", 60f, 555f, sigText)
+
+            // QR Code Matrix Box on Right
+            val qrRect = RectF(740f, 400f, 960f, 580f)
+            canvas.drawRoundRect(qrRect, 8f, 8f, sigBg)
+            canvas.drawRoundRect(qrRect, 8f, 8f, sigBorder)
+            val qrPaint = Paint().apply { color = android.graphics.Color.BLACK }
+            val qSize = 6
+            val qw = (qrRect.width() - 16f) / qSize
+            val qh = (qrRect.height() - 16f) / qSize
+            for (r in 0 until qSize) {
+                for (c in 0 until qSize) {
+                    if ((r * c + r + c) % 2 == 0) {
+                        canvas.drawRect(qrRect.left + 8f + c * qw + 1f, qrRect.top + 8f + r * qh + 1f, qrRect.left + 8f + (c + 1) * qw - 1f, qrRect.top + 8f + (r + 1) * qh - 1f, qrPaint)
+                    }
+                }
+            }
+        }
+
+        return bitmap
+    }
+
+    fun renderAndSaveSingleCard(side: String): File? {
+        return runCatching {
+            val bitmap = renderCard(side)
             val dir = File(context.filesDir, "exports").apply { mkdirs() }
-            val file = File(dir, "bigsta_${selectedCategory.lowercase().replace(" ", "_")}_${selectedSide}_${System.currentTimeMillis()}.png")
+            val file = File(dir, "bigsta_${selectedCategory.lowercase().replace(" ", "_")}_${side}_${System.currentTimeMillis()}.png")
             FileOutputStream(file).use { out ->
                 bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
             }
@@ -156,7 +316,40 @@ fun IdCardStudioScreen(
                 mimeType = "image/png",
                 localPath = file.absolutePath,
                 sizeBytes = file.length(),
-                pageCount = null,
+                pageCount = 1,
+                sourceType = "ID_CARD"
+            )
+            file
+        }.getOrNull()
+    }
+
+    fun renderAndSaveMergedSheet(): File? {
+        return runCatching {
+            val front = renderCard("front")
+            val back = renderCard("back")
+
+            // Merged double CR80 print sheet (vertical stack)
+            val sheetWidth = 1012
+            val sheetHeight = 638 * 2 + 60
+            val mergedBmp = Bitmap.createBitmap(sheetWidth, sheetHeight, Bitmap.Config.ARGB_8888)
+            val canvas = Canvas(mergedBmp)
+            canvas.drawColor(android.graphics.Color.rgb(244, 244, 245))
+
+            canvas.drawBitmap(front, 0f, 0f, null)
+            canvas.drawBitmap(back, 0f, 638f + 60f, null)
+
+            val dir = File(context.filesDir, "exports").apply { mkdirs() }
+            val file = File(dir, "bigsta_${selectedCategory.lowercase().replace(" ", "_")}_merged_sheet_${System.currentTimeMillis()}.png")
+            FileOutputStream(file).use { out ->
+                mergedBmp.compress(Bitmap.CompressFormat.PNG, 100, out)
+            }
+            viewModel.recordLocalExport(
+                id = file.name,
+                fileName = file.name,
+                mimeType = "image/png",
+                localPath = file.absolutePath,
+                sizeBytes = file.length(),
+                pageCount = 2,
                 sourceType = "ID_CARD"
             )
             file
@@ -166,7 +359,12 @@ fun IdCardStudioScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("ID Card Designer") },
+                title = {
+                    Column {
+                        Text("ID Card Studio", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                        Text("$selectedCategory • Merging & Verification", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -175,25 +373,21 @@ fun IdCardStudioScreen(
                 actions = {
                     IconButton(
                         onClick = {
-                            val file = lastExportedFile ?: renderAndSaveCard()
+                            val file = lastExportedFile ?: renderAndSaveSingleCard(selectedSide)
                             if (file != null) {
                                 lastExportedFile = file
-                                val uri = FileProvider.getUriForFile(
-                                    context,
-                                    "${context.packageName}.fileprovider",
-                                    file
-                                )
+                                val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
                                 val shareIntent = Intent(Intent.ACTION_SEND).apply {
                                     type = "image/png"
                                     putExtra(Intent.EXTRA_STREAM, uri)
                                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                                 }
-                                context.startActivity(Intent.createChooser(shareIntent, "Share ID Card"))
+                                context.startActivity(Intent.createChooser(shareIntent, "Share Exported ID Card"))
                             }
                         },
                         modifier = Modifier.testTag("id_card_share_btn")
                     ) {
-                        Icon(Icons.Default.Share, contentDescription = "Share exported card")
+                        Icon(Icons.Default.Share, contentDescription = "Share card")
                     }
                 }
             )
@@ -219,111 +413,66 @@ fun IdCardStudioScreen(
                 }
             }
 
-            // Independent Front / Back Selector
-            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                listOf("front", "back").forEachIndexed { index, side ->
-                    SegmentedButton(
-                        selected = selectedSide == side,
-                        onClick = { selectedSide = side },
-                        shape = SegmentedButtonDefaults.itemShape(index, 2),
-                        modifier = Modifier.testTag("card_side_$side")
-                    ) {
-                        Text("${side.replaceFirstChar { it.uppercase() }} Side")
+            // Independent Front / Back Selector with Flip action
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                SingleChoiceSegmentedButtonRow(modifier = Modifier.weight(1f)) {
+                    listOf("front", "back").forEachIndexed { index, side ->
+                        SegmentedButton(
+                            selected = selectedSide == side,
+                            onClick = { selectedSide = side },
+                            shape = SegmentedButtonDefaults.itemShape(index, 2),
+                            modifier = Modifier.testTag("card_side_$side")
+                        ) {
+                            Text("${side.replaceFirstChar { it.uppercase() }} Side")
+                        }
                     }
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                IconButton(onClick = { selectedSide = if (selectedSide == "front") "back" else "front" }) {
+                    Icon(Icons.Default.FlipCameraAndroid, contentDescription = "Flip Card")
                 }
             }
 
-            // Live Solid Card Preview
+            // Live CR80 Card Preview
+            val previewBitmap = remember(
+                selectedCategory,
+                selectedSide,
+                fullName,
+                idNumber,
+                dateOfBirth,
+                gender,
+                nationality,
+                bloodGroup,
+                licenceClasses,
+                expiryDate,
+                facilityCode,
+                memberType,
+                nrcProvince,
+                photoBitmap,
+                issuingAuthority,
+                cardNotice
+            ) {
+                renderCard(selectedSide)
+            }
+
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(225.dp)
                     .clip(RoundedCornerShape(14.dp))
                     .background(Color.White)
-                    .border(1.5.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(14.dp))
+                    .border(1.5.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(14.dp)),
+                contentAlignment = Alignment.Center
             ) {
-                if (!activeTemplate?.backgroundUrl.isNullOrBlank()) {
-                    AsyncImage(
-                        model = activeTemplate?.backgroundUrl,
-                        contentDescription = "Template background",
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
-
-                Column(modifier = Modifier.fillMaxSize()) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(MaterialTheme.colorScheme.primary)
-                            .padding(horizontal = 16.dp, vertical = 10.dp)
-                    ) {
-                        Text(
-                            text = "${selectedCategory.uppercase()} • ${selectedSide.uppercase()}",
-                            color = MaterialTheme.colorScheme.onPrimary,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 12.sp
-                        )
-                    }
-
-                    if (selectedSide == "front") {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(16.dp),
-                            horizontalArrangement = Arrangement.spacedBy(14.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(72.dp, 92.dp)
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(MaterialTheme.colorScheme.surfaceVariant),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                val bmp = photoBitmap
-                                if (bmp != null) {
-                                    Image(
-                                        bitmap = bmp.asImageBitmap(),
-                                        contentDescription = "Applicant photo",
-                                        contentScale = ContentScale.Crop,
-                                        modifier = Modifier.fillMaxSize()
-                                    )
-                                } else {
-                                    Icon(Icons.Default.Person, contentDescription = "Photo placeholder")
-                                }
-                            }
-                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Text("NAME", fontSize = 10.sp, color = Color.Gray)
-                                Text(fullName, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Color.Black)
-                                Text("ID NUMBER", fontSize = 10.sp, color = Color.Gray)
-                                Text(idNumber, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = Color.Black)
-                                Text("DOB: $dateOfBirth", fontSize = 12.sp, color = Color.DarkGray)
-                            }
-                        }
-                    } else {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(16.dp),
-                            verticalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Column {
-                                Text("ISSUING AUTHORITY", fontSize = 10.sp, color = Color.Gray)
-                                Text(issuingAuthority, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = Color.Black)
-                            }
-                            Column {
-                                Text("HOLDER REFERENCE", fontSize = 10.sp, color = Color.Gray)
-                                Text("$fullName • $idNumber", fontSize = 12.sp, color = Color.DarkGray)
-                            }
-                            Text(
-                                activeTemplate?.name ?: "Standard Back Layout",
-                                fontSize = 11.sp,
-                                color = Color.Gray
-                            )
-                        }
-                    }
-                }
+                Image(
+                    bitmap = previewBitmap.asImageBitmap(),
+                    contentDescription = "CR80 Live Render",
+                    modifier = Modifier.fillMaxSize()
+                )
             }
 
             if (!exportFeedback.isNullOrBlank()) {
@@ -340,32 +489,111 @@ fun IdCardStudioScreen(
                 }
             }
 
+            // Card Layer Fields
             SolidSectionCard {
-                Text("Card Layer Fields", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                Text("$selectedCategory Data Mapping", fontWeight = FontWeight.Bold, fontSize = 15.sp)
                 Spacer(modifier = Modifier.height(10.dp))
+
                 OutlinedTextField(
                     value = fullName,
                     onValueChange = { fullName = it },
-                    label = { Text("Full Name") },
+                    label = { Text("Full Name (Jina Kamili)") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(modifier = Modifier.height(8.dp))
+
                 OutlinedTextField(
                     value = idNumber,
                     onValueChange = { idNumber = it },
-                    label = { Text("ID / Reference Number") },
+                    label = {
+                        Text(when (selectedCategory) {
+                            "Driving Licence" -> "Licence Reference Number"
+                            "NHIF" -> "NHIF Membership Number"
+                            "NRC Zambia" -> "NRC Number (e.g. 123456/12/1)"
+                            else -> "NIDA National ID Number"
+                        })
+                    },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(modifier = Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = dateOfBirth,
-                    onValueChange = { dateOfBirth = it },
-                    label = { Text("Date of Birth (YYYY-MM-DD)") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
+
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = dateOfBirth,
+                        onValueChange = { dateOfBirth = it },
+                        label = { Text("Date of Birth") },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f)
+                    )
+                    OutlinedTextField(
+                        value = gender,
+                        onValueChange = { gender = it },
+                        label = { Text("Gender") },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+
+                if (selectedCategory == "Driving Licence") {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(
+                            value = bloodGroup,
+                            onValueChange = { bloodGroup = it },
+                            label = { Text("Blood Group") },
+                            singleLine = true,
+                            modifier = Modifier.weight(1f)
+                        )
+                        OutlinedTextField(
+                            value = licenceClasses,
+                            onValueChange = { licenceClasses = it },
+                            label = { Text("Classes (A,B,C,D,E)") },
+                            singleLine = true,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = expiryDate,
+                        onValueChange = { expiryDate = it },
+                        label = { Text("Expiry Date (YYYY-MM-DD)") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+
+                if (selectedCategory == "NHIF") {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = facilityCode,
+                        onValueChange = { facilityCode = it },
+                        label = { Text("Designated Health Facility") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = memberType,
+                        onValueChange = { memberType = it },
+                        label = { Text("Membership Scheme") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+
+                if (selectedCategory == "NRC Zambia") {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = nrcProvince,
+                        onValueChange = { nrcProvince = it },
+                        label = { Text("Province / District of Issue") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+
                 if (selectedSide == "back") {
                     Spacer(modifier = Modifier.height(8.dp))
                     OutlinedTextField(
@@ -375,7 +603,16 @@ fun IdCardStudioScreen(
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = cardNotice,
+                        onValueChange = { cardNotice = it },
+                        label = { Text("Back Notice / Terms") },
+                        maxLines = 3,
+                        modifier = Modifier.fillMaxWidth()
+                    )
                 }
+
                 Spacer(modifier = Modifier.height(12.dp))
                 OutlinedButton(
                     onClick = {
@@ -389,13 +626,14 @@ fun IdCardStudioScreen(
                 ) {
                     Icon(Icons.Default.PhotoLibrary, contentDescription = null)
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Choose Passport Photo (Photo Picker)")
+                    Text(if (photoBitmap == null) "Select Passport Photo (Photo Picker)" else "Change Passport Photo")
                 }
             }
 
+            // Export Actions
             Button(
                 onClick = {
-                    val saved = renderAndSaveCard()
+                    val saved = renderAndSaveSingleCard(selectedSide)
                     if (saved != null) {
                         lastExportedFile = saved
                         exportFeedback = "Exported ${saved.name} (${saved.length() / 1024} KB) to Downloads."
@@ -411,7 +649,28 @@ fun IdCardStudioScreen(
             ) {
                 Icon(Icons.Default.Download, contentDescription = null)
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Render & Save PNG (${selectedSide.uppercase()})")
+                Text("Render & Save PNG (${selectedSide.uppercase()} SIDE)")
+            }
+
+            OutlinedButton(
+                onClick = {
+                    val saved = renderAndSaveMergedSheet()
+                    if (saved != null) {
+                        lastExportedFile = saved
+                        exportFeedback = "Exported Dual Merged Sheet: ${saved.name} (${saved.length() / 1024} KB) to Downloads."
+                    } else {
+                        exportFeedback = "Could not render merged sheet."
+                    }
+                },
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp)
+                    .testTag("id_card_merge_btn")
+            ) {
+                Icon(Icons.Default.ViewAgenda, contentDescription = null)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Export Merged Dual-Side Print Sheet (Front + Back)")
             }
         }
     }
