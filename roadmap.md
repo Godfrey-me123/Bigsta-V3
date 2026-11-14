@@ -1,0 +1,26 @@
+# Roadmap
+
+- [ ] Restore the specified email administrator through protected account roles.
+- [ ] Save email registrations to profiles and show real normal accounts in the administrator list.
+- [x] Add administrator template setup and category reassignment with independent front/back saves.
+- [ ] Verify requested flows and commit completed steps; direct pushes are handled by the platform.
+
+- [x] Remove embedded database credentials and legacy project fallbacks; configured database probe passes and browser requests reach only the configured project.
+
+- [x] Import BIGsta app code from GitHub repo "New-age" into this project
+- [x] Restore database access for all tables (grants were missing)
+- [x] Save Zambia NRC submissions to the database
+- [ ] Check RLS on all tables — blocked: app signs in with passkeys, not real accounts; locking tables needs a decision from the user
+- [ ] Auto-push to GitHub — blocked: user must connect via Plus menu > GitHub (Lovable sync)
+- [x] Stage 1 offline/connectivity: real server+database probe, offline banner, NIDA & driving licence forms use it, service worker v2 caches template backgrounds, CI build fixed
+- [ ] Stage 2 user-to-admin request & reply system — needs decision on accounts (passkey users have no real login, so per-user privacy can't be enforced yet)
+- [ ] Stage 3 template background audit — needs database access to list each template's front/back records
+- [ ] Stage 4 payments review — needs admin confirmation of current provider flow
+- [x] Silent offline template prefetch (only for users with tokens)
+- [x] Recent requests not showing — audit all user & admin request sections so every user request appears
+- [x] Search + status filters on user and admin request lists; live user↔admin round-trip verified
+
+- [x] Verify protected admin authorization and await payment-request saving (priority follow-up); eight tests pass and signed-out admin endpoints return 401.
+- [ ] Upload verified payment repair to the latest github-connector branch without replacing newer work.
+- [ ] Live database, template counts, payment persistence and cross-device conversations — blocked by expired Supabase workspace authorization; reconnect Supabase in project settings.
+- [ ] Vercel and APK production verification — deployment and APK test environments are not available here.

@@ -1,0 +1,37 @@
+package com.example.ui.theme
+
+import androidx.compose.ui.graphics.Color
+
+// Clean, solid-color Material 3 palette — strictly NO GRADIENTS
+val BigstaBackgroundLight = Color(0xFFF7F5F3)
+val BigstaSurfaceLight = Color(0xFFFFFFFF)
+val BigstaSurfaceVariantLight = Color(0xFFEDEAE6)
+val BigstaPrimaryLight = Color(0xFF18181B)
+val BigstaOnPrimaryLight = Color(0xFFFFFFFF)
+val BigstaPrimaryContainerLight = Color(0xFFE4E4E7)
+val BigstaOnPrimaryContainerLight = Color(0xFF18181B)
+val BigstaSecondaryLight = Color(0xFF0F766E)
+val BigstaOnSecondaryLight = Color(0xFFFFFFFF)
+val BigstaSecondaryContainerLight = Color(0xFFCCFBF1)
+val BigstaOnSecondaryContainerLight = Color(0xFF134E4A)
+val BigstaAccentOrange = Color(0xFFEA580C)
+val BigstaAccentPurple = Color(0xFF6D28D9)
+val BigstaSuccessGreen = Color(0xFF15803D)
+val BigstaWarningAmber = Color(0xFFB45309)
+val BigstaErrorRed = Color(0xFFB91C1C)
+val BigstaOutlineLight = Color(0xFFD6D3D1)
+val BigstaTextPrimaryLight = Color(0xFF141414)
+val BigstaTextSecondaryLight = Color(0xFF57534E)
+
+val BigstaBackgroundDark = Color(0xFF121417)
+val BigstaSurfaceDark = Color(0xFF1B1F24)
+val BigstaSurfaceVariantDark = Color(0xFF262B32)
+val BigstaPrimaryDark = Color(0xFFF4F4F5)
+val BigstaOnPrimaryDark = Color(0xFF18181B)
+val BigstaPrimaryContainerDark = Color(0xFF27272A)
+val BigstaOnPrimaryContainerDark = Color(0xFFF4F4F5)
+val BigstaSecondaryDark = Color(0xFF2DD4BF)
+val BigstaOnSecondaryDark = Color(0xFF042F2E)
+val BigstaOutlineDark = Color(0xFF3F3F46)
+val BigstaTextPrimaryDark = Color(0xFFF4F4F5)
+val BigstaTextSecondaryDark = Color(0xFFA1A1AA)

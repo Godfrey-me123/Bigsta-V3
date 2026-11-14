@@ -1,0 +1,481 @@
+BIGsta — COMPLETE NATIVE ANDROID KOTLIN RECONSTRUCTION
+
+PROJECT OBJECTIVE
+
+Reconstruct BIGsta as a proper native Android application using Kotlin.
+
+This is not a WebView conversion and not simply a website redesign.
+
+The objective is to create a modern Android application with native Android navigation, screens, menus, buttons, dialogs, notifications, background services and SMS integration.
+
+The existing BIGsta web application is the reference for business logic, database communication, user workflows and administrator functionality.
+
+We want to improve the Android experience without breaking the existing backend.
+
+CRITICAL RULE: RECONSTRUCT THE INTERFACE AND ANDROID-SPECIFIC FUNCTIONALITY, NOT THE EXISTING DATABASE CONTRACTS.
+
+---
+
+PHASE 1 — AUDIT BEFORE IMPLEMENTATION
+
+First inspect the entire imported Kotlin project and the existing BIGsta integration.
+
+Identify:
+
+- Existing Kotlin packages and architecture.
+- Activities and Fragments.
+- Jetpack Compose or XML layouts.
+- Navigation and screen structure.
+- Authentication implementation.
+- Supabase configuration and communication.
+- Database tables and relationships.
+- API endpoints and request/response models.
+- Database field names and data types.
+- User dashboard.
+- Administrator dashboard.
+- Payment and recharge functionality.
+- Transaction verification.
+- Notifications.
+- Existing SMS-related functionality.
+- Existing permissions and background services.
+
+Compare the existing Kotlin implementation with the BIGsta application workflows.
+
+Prepare a report identifying what already works, what is missing and what needs to be reconstructed.
+
+Do not immediately delete or replace existing files.
+
+---
+
+PHASE 2 — STRICT DATABASE AND BACKEND PRESERVATION
+
+This is the most important requirement.
+
+The existing database communication must remain compatible.
+
+DO NOT CHANGE:
+
+- Supabase project URL.
+- Supabase authentication configuration.
+- Database table names.
+- Database column names.
+- Database column types.
+- JSON property names.
+- API request and response structures.
+- Existing DTOs and data models.
+- Enum values.
+- Existing RPC function names and parameters.
+- Existing database relationships.
+- Authentication identifiers.
+- Existing payment and transaction references.
+- Existing storage bucket names and paths.
+- Existing business logic and validation rules.
+
+Do not rename fields for aesthetic reasons.
+
+Do not convert existing data types to different types.
+
+Do not replace working database functions with invented functions.
+
+Do not create a new database schema simply because the Android application is being reconstructed.
+
+Keep existing Kotlin model types and serialization mappings compatible with the actual backend.
+
+If a backend change is genuinely necessary, explain why before implementing it.
+
+The database must continue communicating with the same existing BIGsta backend.
+
+---
+
+PHASE 3 — NATIVE ANDROID INTERFACE RECONSTRUCTION
+
+Use modern native Android development.
+
+Preferred technologies:
+
+- Kotlin.
+- Jetpack Compose where appropriate.
+- Material 3.
+- Navigation Compose.
+- ViewModel.
+- StateFlow.
+- Kotlin Coroutines.
+- Repository architecture.
+- WorkManager for suitable persistent background work.
+- Native Android notifications.
+- Native file pickers and sharing.
+
+If the existing project already has a working architecture, extend it instead of unnecessarily replacing everything.
+
+Design requirements:
+
+Reconstruct the visual interface using modern Android design principles.
+
+Improve:
+
+- Home screen.
+- User dashboard.
+- Admin dashboard.
+- Bottom navigation.
+- Side navigation where appropriate.
+- Menus.
+- Buttons.
+- Cards.
+- Form layouts.
+- Input fields.
+- Dialogs.
+- Confirmation screens.
+- Lists and tables.
+- Transaction history.
+- Recharge interface.
+- Settings.
+- Notifications.
+- Loading and error states.
+
+Use:
+
+- Clean solid-color backgrounds.
+- Professional light theme.
+- Consistent spacing.
+- Clear visual hierarchy.
+- Rounded cards and buttons.
+- Appropriate icons.
+- Clear button states.
+- Good touch targets.
+- Responsive Android layouts.
+- Accessible contrast.
+
+NO GRADIENTS.
+
+Do not use gradient backgrounds, gradient buttons or gradient cards.
+
+Use solid colors and a consistent Material 3 color system.
+
+Typography and existing terminology:
+
+Preserve the existing text labels, spelling, terminology and data-field names.
+
+Do not rename or alter backend field names, Kotlin model properties, DTO properties or serialized JSON keys.
+
+Do not introduce new terminology that changes the meaning of existing operations.
+
+The objective is visual improvement, not changing how the application communicates with its backend.
+
+---
+
+PHASE 4 — SEPARATE USER AND ADMIN INTERFACES
+
+Reconstruct the user and administrator experiences as distinct native navigation areas.
+
+User interface:
+
+Preserve the existing user capabilities, including:
+
+- Login and registration.
+- User dashboard.
+- Account information.
+- Available services.
+- Payment and recharge.
+- Token balance.
+- Transaction history.
+- Notifications.
+- Account settings.
+- Existing user-specific features.
+
+Improve their navigation, layout, buttons, colors and interaction.
+
+Administrator interface:
+
+Preserve existing administrator functionality.
+
+Improve:
+
+- Admin dashboard.
+- User management.
+- User approval.
+- Recharge approval.
+- Transaction monitoring.
+- Payment records.
+- User token balances.
+- Service management.
+- Existing administration tools.
+
+Maintain role-based access.
+
+Never allow a normal user to access administrator screens or administrator operations simply by navigating to a route.
+
+Preserve the existing authorization rules and backend permissions.
+
+---
+
+PHASE 5 — NATIVE SMS AND TRANSACTION INTEGRATION
+
+We need native Android functionality that the web application cannot reliably provide.
+
+The objective is to support legitimate, user-consented transaction SMS processing.
+
+A. Transaction SMS receiver
+
+Implement an Android-native SMS integration for supported payment and transaction notifications, subject to Android permissions and distribution requirements.
+
+Before enabling this functionality:
+
+1. Explain to the user what messages will be processed.
+2. Request the necessary permissions only when legally and technically permitted.
+3. Let the user enable or disable transaction SMS monitoring.
+4. Allow configuration of supported transaction message senders or formats.
+5. Clearly show whether SMS monitoring is active.
+
+Do not read or upload unrelated personal conversations.
+
+Do not collect an entire SMS inbox.
+
+B. Transaction message parsing
+
+For supported transaction confirmation messages, extract only the necessary fields:
+
+- Transaction reference/code.
+- Transaction amount.
+- Transaction date and time.
+- Sender or payment provider.
+- Transaction type where identifiable.
+- Relevant account identifier where explicitly required by the existing BIGsta backend.
+
+Preserve the exact transaction reference.
+
+Parse amounts carefully, including decimal values and currency formats.
+
+Do not confuse:
+
+- Transaction reference codes.
+- Payment confirmation codes.
+- Login OTPs.
+- Banking authentication codes.
+
+Do not forward login OTPs, passwords, PINs or banking authentication codes to the database.
+
+The transaction reference must be treated separately from authentication secrets.
+
+C. Database forwarding
+
+After validating a supported transaction message:
+
+1. Identify the correct transaction.
+2. Extract the approved transaction fields.
+3. Validate the amount and transaction reference.
+4. Check for duplicates.
+5. Associate the record with the correct authenticated BIGsta user.
+6. Send the record through the existing approved backend integration.
+7. Store the transaction using the existing database structure.
+8. Record processing status.
+9. Update the transaction interface when the server confirms successful processing.
+
+Do not mark a transaction as approved merely because an SMS was received.
+
+The existing backend must perform the necessary verification and approval.
+
+Implement:
+
+- Duplicate transaction prevention.
+- Retry handling.
+- Network failure handling.
+- Pending upload queue.
+- Delivery status.
+- Error logging without exposing sensitive message contents.
+
+Use a unique transaction reference or suitable idempotency mechanism to prevent repeated processing.
+
+D. Background processing
+
+Use suitable native Android components.
+
+Use:
+
+- BroadcastReceiver where permitted.
+- WorkManager for persistent upload retries.
+- Coroutines for asynchronous processing.
+- Foreground services only when genuinely necessary and compliant with Android restrictions.
+
+Do not keep an unnecessary permanent background service running.
+
+Do not claim background SMS monitoring works when the required permissions or platform conditions are unavailable.
+
+E. SMS permissions and policy compliance
+
+Android SMS access is restricted.
+
+Use the SMS Retriever API or SMS User Consent API for supported OTP verification workflows.
+
+For financial transaction SMS processing, implement only an eligible, disclosed and user-consented use case.
+
+Do not assume that adding READ_SMS or RECEIVE_SMS automatically makes the functionality eligible for Google Play distribution.
+
+If unrestricted SMS permissions are not permitted for this app's distribution model, provide a compliant alternative such as explicit transaction-message sharing or user-assisted submission.
+
+Do not secretly use notification access or another permission to bypass SMS restrictions.
+
+---
+
+PHASE 6 — NATIVE NOTIFICATIONS
+
+Reconstruct BIGsta notifications using Android notification channels.
+
+Implement appropriate notification types:
+
+- Successful payment.
+- Pending transaction.
+- Approved recharge.
+- Rejected recharge.
+- Token balance updates.
+- Important account alerts.
+- Administrator notifications.
+- Transaction processing failures.
+
+Requirements:
+
+- Real Android notifications.
+- Appropriate notification icons.
+- Notification channels.
+- User-controlled notification settings.
+- Notification tap navigation to the relevant screen.
+- No duplicate notifications.
+- Correct notification permission handling on Android versions that require it.
+
+---
+
+PHASE 7 — NATIVE FORMS AND FILE OPERATIONS
+
+Use native Android components where beneficial.
+
+Implement or preserve:
+
+- Native document picker.
+- Image picker.
+- Camera integration where existing functionality requires it.
+- File sharing.
+- Download management.
+- PDF viewing.
+- Printing.
+- Permission handling.
+- Upload progress.
+- Clear error messages.
+
+Do not replace working backend uploads or existing storage paths.
+
+---
+
+PHASE 8 — ARCHITECTURE AND SEPARATION
+
+Organize the Kotlin application into clear modules or packages.
+
+Suggested structure:
+
+app/
+  data/
+    remote/
+    local/
+    models/
+    repositories/
+  domain/
+    models/
+    usecases/
+  ui/
+    theme/
+    components/
+    navigation/
+  features/
+    authentication/
+    user/
+    admin/
+    payments/
+    transactions/
+    sms/
+    notifications/
+    settings/
+  core/
+    network/
+    database/
+    security/
+    permissions/
+    utilities/
+
+Keep database repositories separate from visual screens.
+
+Screens must not directly implement database queries or contain hardcoded credentials.
+
+Keep business rules out of UI components.
+
+Use dependency injection if already supported or introduce it carefully.
+
+---
+
+PHASE 9 — TESTING AND DATABASE VERIFICATION
+
+Test the native app against the actual existing BIGsta backend.
+
+Test:
+
+1. User login.
+2. Admin login.
+3. User registration.
+4. Role separation.
+5. User dashboard.
+6. Admin dashboard.
+7. Token balance.
+8. Recharge submission.
+9. Recharge approval.
+10. Transaction history.
+11. Database record insertion.
+12. Transaction SMS parsing.
+13. Duplicate SMS prevention.
+14. Offline upload queue.
+15. Notification delivery.
+16. Image and document uploads.
+17. Logout and login persistence.
+
+For SMS tests, use synthetic transaction messages and test accounts.
+
+Compare the Kotlin request payloads and database responses against the existing working BIGsta implementation.
+
+Verify that no field names, types, identifiers or database mappings have changed.
+
+---
+
+PHASE 10 — FINAL BUILD
+
+Produce a complete native Android application.
+
+Deliver:
+
+- Working Kotlin source code.
+- AndroidManifest.xml.
+- Required permissions.
+- Gradle dependencies.
+- Native interface.
+- User dashboard.
+- Admin dashboard.
+- SMS transaction integration where permitted.
+- Notification integration.
+- Existing backend connectivity.
+- Debug APK.
+- Release APK or Android App Bundle.
+- Build instructions.
+
+---
+
+STRICT FINAL RULES
+
+1. Do not convert this into a WebView application.
+2. Do not destroy existing database communication.
+3. Do not rename existing backend fields or change their types.
+4. Do not remove working features.
+5. Do not redesign the database unnecessarily.
+6. Do not change business logic simply to make the interface easier to implement.
+7. Do not use gradients.
+8. Do not replace the existing authentication system.
+9. Do not collect unrelated SMS messages.
+10. Do not claim a feature works without testing it.
+
+Reconstruct the Android interface and native functionality while preserving BIGsta's existing backend contracts and business operations.
+
+Work incrementally. Build and test after each major phase. Report all modified files and any remaining limitations.
