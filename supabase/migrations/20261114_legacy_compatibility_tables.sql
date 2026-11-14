@@ -1,5 +1,23 @@
--- Compatibility Migration for Legacy BIGsta Tables
--- Ensures all 8 legacy prototype tables exist on amber-dog if needed by older clients.
+-- ============================================================================
+-- BIGsta-V3 / amber-dog Database Migration
+-- Target Database: amber-dog (fpkgkxyihbqlrsstvnnh)
+-- Target App: Bigsta-V3 (Kotlin Native Android)
+-- ============================================================================
+
+-- Step 0: Ensure helper function is_bigsta_admin exists (checks user_roles)
+CREATE OR REPLACE FUNCTION public.is_bigsta_admin()
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.user_roles
+    WHERE user_id = auth.uid()
+      AND LOWER(role) = 'admin'
+  );
+$$;
 
 -- 1. Payment Submissions
 CREATE TABLE IF NOT EXISTS public.payment_submissions (
@@ -71,7 +89,7 @@ DROP POLICY IF EXISTS "Anyone can read template versions" ON public.template_ver
 CREATE POLICY "Anyone can read template versions" ON public.template_versions
   FOR SELECT TO authenticated, anon USING (true);
 
--- 6. Token Wallets (Legacy alias; active balance is in profiles.tokens)
+-- 6. Token Wallets (Legacy alias; active balance in profiles.tokens)
 CREATE TABLE IF NOT EXISTS public.token_wallets (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id uuid REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -109,14 +127,37 @@ DROP POLICY IF EXISTS "Users can manage own settings" ON public.user_settings;
 CREATE POLICY "Users can manage own settings" ON public.user_settings
   FOR ALL TO authenticated USING (auth.uid() = user_id);
 
--- Enable Realtime publication for newly added tables
+-- Step 9: Safe Realtime Publication Registration
+-- Adds tables to supabase_realtime if they are not already members
 DO $$
+DECLARE
+  tbl text;
+  tables text[] := ARRAY[
+    'payment_requests',
+    'nida_requests',
+    'profiles',
+    'user_feedback',
+    'sms_logs',
+    'payment_submissions',
+    'token_wallets',
+    'user_settings'
+  ];
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN
-    ALTER PUBLICATION supabase_realtime ADD TABLE public.payment_submissions;
-    ALTER PUBLICATION supabase_realtime ADD TABLE public.token_wallets;
-    ALTER PUBLICATION supabase_realtime ADD TABLE public.user_settings;
+    FOREACH tbl IN ARRAY tables LOOP
+      BEGIN
+        EXECUTE format('ALTER PUBLICATION supabase_realtime ADD TABLE public.%I', tbl);
+      EXCEPTION
+        WHEN duplicate_object THEN
+          -- Table is already in the publication, ignore
+          NULL;
+        WHEN undefined_table THEN
+          -- Table does not exist in schema, ignore
+          NULL;
+        WHEN OTHERS THEN
+          -- Catch any other publication error safely
+          NULL;
+      END;
+    END LOOP;
   END IF;
-EXCEPTION WHEN OTHERS THEN
-  -- Ignore if publication already includes table
 END $$;
