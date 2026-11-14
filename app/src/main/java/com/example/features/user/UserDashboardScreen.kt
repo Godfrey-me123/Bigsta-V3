@@ -42,7 +42,8 @@ fun UserDashboardScreen(
     viewModel: UserDashboardViewModel,
     unreadNotifications: Int,
     onNavigate: (String) -> Unit,
-    onSelectOffer: (WeeklyOfferDto) -> Unit
+    onSelectOffer: (WeeklyOfferDto) -> Unit,
+    onOpenDrawer: () -> Unit
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val session by viewModel.session.collectAsStateWithLifecycle()
@@ -53,6 +54,7 @@ fun UserDashboardScreen(
 
     val shortcuts = listOf(
         StudioToolShortcut("ID Card Studio", "Front & Back canvas + export", Icons.Default.Badge, "id_studio", "nav_id_studio"),
+        StudioToolShortcut("Template Editor", "Custom layers, fonts & sides", Icons.Default.EditNote, "template_editor", "nav_template_editor"),
         StudioToolShortcut("Gov Forms", "NIDA, License, NHIF & NRC", Icons.Default.Description, "forms", "nav_forms"),
         StudioToolShortcut("PDF & Print", "Reader, Print & Downloads", Icons.Default.PictureAsPdf, "pdf_tools", "nav_pdf_tools"),
         StudioToolShortcut("Image Studio", "Crop, passport, watermark", Icons.Default.PhotoFilter, "image_studio", "nav_image_studio"),
@@ -82,6 +84,14 @@ fun UserDashboardScreen(
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                    }
+                },
+                navigationIcon = {
+                    IconButton(
+                        onClick = onOpenDrawer,
+                        modifier = Modifier.testTag("dashboard_menu_btn")
+                    ) {
+                        Icon(Icons.Default.Menu, contentDescription = "Open navigation menu")
                     }
                 },
                 actions = {

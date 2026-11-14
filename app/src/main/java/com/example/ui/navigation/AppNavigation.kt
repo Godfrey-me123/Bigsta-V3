@@ -41,12 +41,15 @@ import com.example.features.user.DocumentToolsScreen
 import com.example.features.user.GovernmentFormsScreen
 import com.example.features.user.IdCardStudioScreen
 import com.example.features.user.ImageStudioScreen
+import com.example.features.user.TemplateStudioEditorScreen
 import com.example.features.user.UserDashboardScreen
 import com.example.features.user.UserDashboardViewModel
+import kotlinx.coroutines.launch
 
 object BigstaRoutes {
     const val DASHBOARD = "dashboard"
     const val ID_STUDIO = "id_studio"
+    const val TEMPLATE_EDITOR = "template_editor"
     const val FORMS = "forms"
     const val PDF_TOOLS = "pdf_tools"
     const val IMAGE_STUDIO = "image_studio"
@@ -72,6 +75,7 @@ private val topNavItems = listOf(
     TopNavItem(BigstaRoutes.SETTINGS, "Settings", Icons.Default.Settings, "bottom_nav_settings")
 )
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BigstaAppRoot(
     appContainer: AppContainer,
@@ -131,6 +135,9 @@ fun BigstaAppRoot(
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
 
+    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+    val coroutineScope = rememberCoroutineScope()
+
     fun navigateTopLevel(route: String) {
         navController.navigate(route) {
             popUpTo(navController.graph.findStartDestination().id) {
@@ -169,120 +176,140 @@ fun BigstaAppRoot(
 
     val showTopChrome = topNavItems.any { it.route == currentRoute }
 
-    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-        val useNavRail = maxWidth >= 600.dp
+    ModalNavigationDrawer(
+        drawerState = drawerState,
+        drawerContent = {
+            ServiceMenuDrawer(
+                session = session,
+                currentRoute = currentRoute,
+                onNavigate = { route -> navigateSafe(route) },
+                onSignOut = { authViewModel.signOut() },
+                onCloseDrawer = { coroutineScope.launch { drawerState.close() } }
+            )
+        }
+    ) {
+        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+            val useNavRail = maxWidth >= 600.dp
 
-        Scaffold(
-            contentWindowInsets = WindowInsets(0, 0, 0, 0),
-            bottomBar = {
-                if (showTopChrome && !useNavRail) {
-                    NavigationBar {
-                        topNavItems.forEach { item ->
-                            NavigationBarItem(
-                                selected = currentRoute == item.route,
-                                onClick = { navigateTopLevel(item.route) },
-                                icon = { Icon(item.icon, contentDescription = item.label) },
-                                label = { Text(item.label) },
-                                modifier = Modifier.testTag(item.testTag)
-                            )
+            Scaffold(
+                contentWindowInsets = WindowInsets(0, 0, 0, 0),
+                bottomBar = {
+                    if (showTopChrome && !useNavRail) {
+                        NavigationBar {
+                            topNavItems.forEach { item ->
+                                NavigationBarItem(
+                                    selected = currentRoute == item.route,
+                                    onClick = { navigateTopLevel(item.route) },
+                                    icon = { Icon(item.icon, contentDescription = item.label) },
+                                    label = { Text(item.label) },
+                                    modifier = Modifier.testTag(item.testTag)
+                                )
+                            }
                         }
                     }
                 }
-            }
-        ) { innerPadding ->
-            Row(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding)
-            ) {
-                if (showTopChrome && useNavRail) {
-                    NavigationRail(modifier = Modifier.fillMaxHeight()) {
-                        topNavItems.forEach { item ->
-                            NavigationRailItem(
-                                selected = currentRoute == item.route,
-                                onClick = { navigateTopLevel(item.route) },
-                                icon = { Icon(item.icon, contentDescription = item.label) },
-                                label = { Text(item.label) },
-                                modifier = Modifier.testTag(item.testTag)
-                            )
+            ) { innerPadding ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding)
+                ) {
+                    if (showTopChrome && useNavRail) {
+                        NavigationRail(modifier = Modifier.fillMaxHeight()) {
+                            topNavItems.forEach { item ->
+                                NavigationRailItem(
+                                    selected = currentRoute == item.route,
+                                    onClick = { navigateTopLevel(item.route) },
+                                    icon = { Icon(item.icon, contentDescription = item.label) },
+                                    label = { Text(item.label) },
+                                    modifier = Modifier.testTag(item.testTag)
+                                )
+                            }
                         }
                     }
-                }
 
-                Box(modifier = Modifier.weight(1f)) {
-                    NavHost(
-                        navController = navController,
-                        startDestination = BigstaRoutes.DASHBOARD
-                    ) {
-                        composable(BigstaRoutes.DASHBOARD) {
-                            UserDashboardScreen(
-                                viewModel = dashboardViewModel,
-                                unreadNotifications = unreadNotifications,
-                                onNavigate = { route -> navigateSafe(route) },
-                                onSelectOffer = { offer ->
-                                    paymentsViewModel.selectOfferAsPackage(offer)
-                                    navigateSafe(BigstaRoutes.BILLING)
-                                }
-                            )
-                        }
-                        composable(BigstaRoutes.ID_STUDIO) {
-                            IdCardStudioScreen(
-                                viewModel = dashboardViewModel,
-                                onBack = { navController.popBackStack() }
-                            )
-                        }
-                        composable(BigstaRoutes.FORMS) {
-                            GovernmentFormsScreen(
-                                viewModel = dashboardViewModel,
-                                onBack = { navController.popBackStack() }
-                            )
-                        }
-                        composable(BigstaRoutes.PDF_TOOLS) {
-                            DocumentToolsScreen(
-                                viewModel = dashboardViewModel,
-                                onBack = { navController.popBackStack() }
-                            )
-                        }
-                        composable(BigstaRoutes.IMAGE_STUDIO) {
-                            ImageStudioScreen(
-                                viewModel = dashboardViewModel,
-                                onBack = { navController.popBackStack() }
-                            )
-                        }
-                        composable(BigstaRoutes.BILLING) {
-                            BillingRechargeScreen(
-                                viewModel = paymentsViewModel,
-                                currentBalance = dashboardState.profile?.effectiveTokens ?: 0,
-                                onOpenSmsIntake = { navigateSafe(BigstaRoutes.SMS) },
-                                onBack = null
-                            )
-                        }
-                        composable(BigstaRoutes.SMS) {
-                            SmsConsentScreen(
-                                viewModel = smsViewModel,
-                                onBack = null
-                            )
-                        }
-                        composable(BigstaRoutes.NOTIFICATIONS) {
-                            NotificationsScreen(
-                                notificationDao = appContainer.database.appNotificationDao(),
-                                appPreferences = appContainer.appPreferences,
-                                onNavigateRoute = { route -> navigateSafe(route) },
-                                onBack = { navController.popBackStack() }
-                            )
-                        }
-                        composable(BigstaRoutes.ADMIN) {
-                            AdminConsoleScreen(
-                                viewModel = adminViewModel,
-                                onBack = { navController.popBackStack() }
-                            )
-                        }
-                        composable(BigstaRoutes.SETTINGS) {
-                            SettingsScreen(
-                                authViewModel = authViewModel,
-                                dashboardViewModel = dashboardViewModel,
-                                onNavigate = { route -> navigateSafe(route) }
-                            )
+                    Box(modifier = Modifier.weight(1f)) {
+                        NavHost(
+                            navController = navController,
+                            startDestination = BigstaRoutes.DASHBOARD
+                        ) {
+                            composable(BigstaRoutes.DASHBOARD) {
+                                UserDashboardScreen(
+                                    viewModel = dashboardViewModel,
+                                    unreadNotifications = unreadNotifications,
+                                    onNavigate = { route -> navigateSafe(route) },
+                                    onSelectOffer = { offer ->
+                                        paymentsViewModel.selectOfferAsPackage(offer)
+                                        navigateSafe(BigstaRoutes.BILLING)
+                                    },
+                                    onOpenDrawer = { coroutineScope.launch { drawerState.open() } }
+                                )
+                            }
+                            composable(BigstaRoutes.ID_STUDIO) {
+                                IdCardStudioScreen(
+                                    viewModel = dashboardViewModel,
+                                    onBack = { navController.popBackStack() }
+                                )
+                            }
+                            composable(BigstaRoutes.TEMPLATE_EDITOR) {
+                                TemplateStudioEditorScreen(
+                                    viewModel = dashboardViewModel,
+                                    onBack = { navController.popBackStack() }
+                                )
+                            }
+                            composable(BigstaRoutes.FORMS) {
+                                GovernmentFormsScreen(
+                                    viewModel = dashboardViewModel,
+                                    onBack = { navController.popBackStack() }
+                                )
+                            }
+                            composable(BigstaRoutes.PDF_TOOLS) {
+                                DocumentToolsScreen(
+                                    viewModel = dashboardViewModel,
+                                    onBack = { navController.popBackStack() }
+                                )
+                            }
+                            composable(BigstaRoutes.IMAGE_STUDIO) {
+                                ImageStudioScreen(
+                                    viewModel = dashboardViewModel,
+                                    onBack = { navController.popBackStack() }
+                                )
+                            }
+                            composable(BigstaRoutes.BILLING) {
+                                BillingRechargeScreen(
+                                    viewModel = paymentsViewModel,
+                                    currentBalance = dashboardState.profile?.effectiveTokens ?: 0,
+                                    onOpenSmsIntake = { navigateSafe(BigstaRoutes.SMS) },
+                                    onBack = null
+                                )
+                            }
+                            composable(BigstaRoutes.SMS) {
+                                SmsConsentScreen(
+                                    viewModel = smsViewModel,
+                                    onBack = null
+                                )
+                            }
+                            composable(BigstaRoutes.NOTIFICATIONS) {
+                                NotificationsScreen(
+                                    notificationDao = appContainer.database.appNotificationDao(),
+                                    appPreferences = appContainer.appPreferences,
+                                    onNavigateRoute = { route -> navigateSafe(route) },
+                                    onBack = { navController.popBackStack() }
+                                )
+                            }
+                            composable(BigstaRoutes.ADMIN) {
+                                AdminConsoleScreen(
+                                    viewModel = adminViewModel,
+                                    onBack = { navController.popBackStack() }
+                                )
+                            }
+                            composable(BigstaRoutes.SETTINGS) {
+                                SettingsScreen(
+                                    authViewModel = authViewModel,
+                                    dashboardViewModel = dashboardViewModel,
+                                    onNavigate = { route -> navigateSafe(route) }
+                                )
+                            }
                         }
                     }
                 }

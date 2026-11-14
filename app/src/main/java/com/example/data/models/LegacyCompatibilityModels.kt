@@ -73,15 +73,3 @@ data class UserSettingDto(
     val preferences: JsonElement? = null,
     @SerialName("updated_at") val updatedAt: String? = null
 )
-
-@Serializable
-data class UserFeedbackDto(
-    val id: String = "",
-    @SerialName("user_id") val userId: String? = null,
-    @SerialName("user_email") val userEmail: String? = null,
-    val subject: String = "",
-    val message: String = "",
-    @SerialName("admin_reply") val adminReply: String? = null,
-    @SerialName("created_at") val createdAt: String? = null,
-    @SerialName("replied_at") val repliedAt: String? = null
-)

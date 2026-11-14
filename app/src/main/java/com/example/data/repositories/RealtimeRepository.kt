@@ -32,11 +32,13 @@ class RealtimeRepository(
     }
 
     fun startListening(tables: List<String> = listOf("payment_requests", "nida_requests", "profiles", "user_feedback")) {
-        val session = sessionManager.currentSession()
-        val token = if (session.isAuthenticated) session.accessToken else null
-        realtimeClient.connect(token)
-        for (table in tables) {
-            realtimeClient.subscribeTable(table)
+        scope.launch {
+            val session = sessionManager.currentSession()
+            val token = if (session.isAuthenticated) session.accessToken else null
+            realtimeClient.connect(token)
+            for (table in tables) {
+                realtimeClient.subscribeTable(table)
+            }
         }
     }
 

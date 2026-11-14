@@ -5,11 +5,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.AdminPanelSettings
-import androidx.compose.material.icons.filled.Block
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -28,12 +24,14 @@ import com.example.ui.components.StatusBadge
 import com.example.ui.theme.BigstaErrorRed
 import com.example.ui.theme.BigstaSuccessGreen
 
-private enum class AdminTab(val label: String) {
+enum class AdminTab(val label: String) {
     PAYMENTS("Payments"),
     REQUESTS("Requests"),
     USERS("Users"),
     TEMPLATES("Templates"),
-    SMS_LOGS("SMS Logs")
+    SMS_LOGS("SMS Logs"),
+    FEEDBACK("Feedback"),
+    SETTINGS("Settings")
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -65,7 +63,7 @@ fun AdminConsoleScreen(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Icon(Icons.Default.AdminPanelSettings, contentDescription = null)
-                        Text("Administrator Console")
+                        Text("Full Admin Console")
                     }
                 },
                 navigationIcon = {
@@ -396,6 +394,34 @@ fun AdminConsoleScreen(
                                         color = MaterialTheme.colorScheme.onSurface
                                     )
                                 }
+                            }
+                        }
+                    }
+
+                    AdminTab.FEEDBACK -> {
+                        item {
+                            SolidSectionCard {
+                                Text("User Feedback & Support Tickets", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    "User feedback and support issues submitted through the app are monitored and answered here under full administrator control.",
+                                    fontSize = 13.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+
+                    AdminTab.SETTINGS -> {
+                        item {
+                            SolidSectionCard {
+                                Text("System Settings & Webhook Control", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    "Global payment methods, Lipa Namba configurations, SMS webhooks, and maintenance toggles are managed through Supabase system_settings.",
+                                    fontSize = 13.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                             }
                         }
                     }
