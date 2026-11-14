@@ -35,13 +35,22 @@ import com.example.ui.theme.BigstaSuccessGreen
 @Composable
 fun GovernmentFormsScreen(
     viewModel: UserDashboardViewModel,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    initialServiceType: String = "NIDA"
 ) {
     val context = LocalContext.current
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
     val formTypes = listOf("NIDA", "Driving Licence", "NHIF", "NRC Zambia")
-    var selectedType by remember { mutableStateOf("NIDA") }
+    val normalizedInitialType = remember(initialServiceType) {
+        when (initialServiceType.trim().lowercase().replace("%20", " ")) {
+            "driving licence", "driving license" -> "Driving Licence"
+            "nhif" -> "NHIF"
+            "nrc zambia" -> "NRC Zambia"
+            else -> "NIDA"
+        }
+    }
+    var selectedType by remember { mutableStateOf(normalizedInitialType) }
 
     // Common fields
     var firstName by remember { mutableStateOf("") }

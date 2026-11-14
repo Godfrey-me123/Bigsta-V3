@@ -38,6 +38,10 @@ import com.example.features.settings.SettingsScreen
 import com.example.features.sms.SmsConsentScreen
 import com.example.features.sms.SmsViewModel
 import com.example.features.user.DocumentToolsScreen
+import com.example.features.user.DownloadsScreen
+import com.example.features.user.DocxToPdfScreen
+import com.example.features.user.TemplateLibraryScreen
+import com.example.features.user.ServiceCatalogScreen
 import com.example.features.user.GovernmentFormsScreen
 import com.example.features.user.IdCardStudioScreen
 import com.example.features.user.ImageStudioScreen
@@ -52,6 +56,12 @@ object BigstaRoutes {
     const val TEMPLATE_EDITOR = "template_editor"
     const val FORMS = "forms"
     const val PDF_TOOLS = "pdf_tools"
+    const val PDF_LIBRARY = "pdf_library"
+    const val DOCX_TO_PDF = "docx_to_pdf"
+    const val DOWNLOADS = "downloads"
+    const val TEMPLATES = "templates"
+    const val PASSPORT_STUDIO = "passport_studio"
+    const val SERVICE_CATALOG = "services"
     const val IMAGE_STUDIO = "image_studio"
     const val BILLING = "billing"
     const val SMS = "sms"
@@ -262,6 +272,32 @@ fun BigstaAppRoot(
                                     viewModel = dashboardViewModel,
                                     onBack = { navController.popBackStack() }
                                 )
+                            }
+                            composable(BigstaRoutes.SERVICE_CATALOG) {
+                                ServiceCatalogScreen(onBack = { navController.popBackStack() }, onNavigate = { route -> navigateSafe(route) })
+                            }
+                            composable("${BigstaRoutes.FORMS}/{serviceType}") { entry ->
+                                val serviceType = entry.arguments?.getString("serviceType").orEmpty()
+                                GovernmentFormsScreen(viewModel = dashboardViewModel, onBack = { navController.popBackStack() }, initialServiceType = serviceType)
+                            }
+                            composable(BigstaRoutes.TEMPLATES) {
+                                TemplateLibraryScreen(
+                                    viewModel = dashboardViewModel,
+                                    onBack = { navController.popBackStack() },
+                                    onOpenStudio = { navigateSafe(BigstaRoutes.TEMPLATE_EDITOR) }
+                                )
+                            }
+                            composable(BigstaRoutes.DOWNLOADS) {
+                                DownloadsScreen(viewModel = dashboardViewModel, onBack = { navController.popBackStack() })
+                            }
+                            composable(BigstaRoutes.PDF_LIBRARY) {
+                                DocumentToolsScreen(viewModel = dashboardViewModel, onBack = { navController.popBackStack() })
+                            }
+                            composable(BigstaRoutes.DOCX_TO_PDF) {
+                                DocxToPdfScreen(viewModel = dashboardViewModel, onBack = { navController.popBackStack() })
+                            }
+                            composable(BigstaRoutes.PASSPORT_STUDIO) {
+                                ImageStudioScreen(viewModel = dashboardViewModel, onBack = { navController.popBackStack() })
                             }
                             composable(BigstaRoutes.PDF_TOOLS) {
                                 DocumentToolsScreen(

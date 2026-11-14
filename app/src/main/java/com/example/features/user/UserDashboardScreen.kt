@@ -55,9 +55,13 @@ fun UserDashboardScreen(
     val shortcuts = listOf(
         StudioToolShortcut("ID Card Studio", "Front & Back canvas + export", Icons.Default.Badge, "id_studio", "nav_id_studio"),
         StudioToolShortcut("Template Editor", "Custom layers, fonts & sides", Icons.Default.EditNote, "template_editor", "nav_template_editor"),
+        StudioToolShortcut("Services", "Reference service catalog", Icons.Default.GridView, "services", "nav_services"),
         StudioToolShortcut("Gov Forms", "NIDA, License, NHIF & NRC", Icons.Default.Description, "forms", "nav_forms"),
-        StudioToolShortcut("PDF & Print", "Reader, Print & Downloads", Icons.Default.PictureAsPdf, "pdf_tools", "nav_pdf_tools"),
-        StudioToolShortcut("Image Studio", "Crop, passport, watermark", Icons.Default.PhotoFilter, "image_studio", "nav_image_studio"),
+        StudioToolShortcut("Saved Templates", "Account-synced template library", Icons.Default.Collections, "templates", "nav_templates"),
+        StudioToolShortcut("Downloads", "Your exported files", Icons.Default.Download, "downloads", "nav_downloads"),
+        StudioToolShortcut("PDF & Print", "Reader, Print & Library", Icons.Default.PictureAsPdf, "pdf_tools", "nav_pdf_tools"),
+        StudioToolShortcut("DOC to PDF", "Offline document conversion", Icons.Default.Description, "docx_to_pdf", "nav_docx_to_pdf"),
+        StudioToolShortcut("Passport Photo Studio", "Photo specs and print sheets", Icons.Default.PhotoFilter, "passport_studio", "nav_passport_studio"),
         StudioToolShortcut("SMS Intake", "Parse & queue payment SMS", Icons.Default.Sms, "sms", "nav_sms"),
         StudioToolShortcut("Recharge", "Token packs & Lipa Namba", Icons.Default.AccountBalanceWallet, "billing", "nav_billing")
     )

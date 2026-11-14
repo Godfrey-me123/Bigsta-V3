@@ -121,6 +121,46 @@ fun SettingsScreen(
             }
 
             item {
+                Text("BIGsta Tools", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+            }
+            item {
+                SolidSectionCard(onClick = { onNavigate("templates") }, modifier = Modifier.testTag("settings_templates_row")) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Icon(Icons.Default.Collections, contentDescription = null)
+                        Column(Modifier.weight(1f)) {
+                            Text("Saved Templates", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                            Text("Browse templates synced from the account", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Icon(Icons.Default.ChevronRight, contentDescription = null)
+                    }
+                }
+            }
+            item {
+                SolidSectionCard(onClick = { onNavigate("downloads") }, modifier = Modifier.testTag("settings_downloads_row")) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Icon(Icons.Default.Download, contentDescription = null)
+                        Column(Modifier.weight(1f)) {
+                            Text("Downloads & Storage", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                            Text("Manage exported files saved on this device", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Icon(Icons.Default.ChevronRight, contentDescription = null)
+                    }
+                }
+            }
+            item {
+                SolidSectionCard(onClick = { onNavigate("passport_studio") }, modifier = Modifier.testTag("settings_passport_row")) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Icon(Icons.Default.PhotoCamera, contentDescription = null)
+                        Column(Modifier.weight(1f)) {
+                            Text("Passport Photo Studio", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                            Text("Photo size specifications and printable sheets", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Icon(Icons.Default.ChevronRight, contentDescription = null)
+                    }
+                }
+            }
+
+            item {
                 SolidSectionCard(
                     onClick = { onNavigate("notifications") },
                     modifier = Modifier.testTag("settings_notifications_row")
