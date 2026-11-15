@@ -4,6 +4,9 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.graphics.BitmapFactory
+import android.graphics.Path
+import android.graphics.Rect
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
@@ -113,6 +116,35 @@ fun TemplateStudioEditorScreen(
     var isUniversal by remember { mutableStateOf(false) }
     var primaryColorHex by remember { mutableStateOf("#18181B") }
     var cardBgHex by remember { mutableStateOf("#FFFFFF") }
+    var frontBgUri by remember { mutableStateOf<Uri?>(null) }
+    var backBgUri by remember { mutableStateOf<Uri?>(null) }
+    var frontBgBitmap by remember { mutableStateOf<Bitmap?>(null) }
+    var backBgBitmap by remember { mutableStateOf<Bitmap?>(null) }
+
+    val bgLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            val bmp = runCatching {
+                context.contentResolver.openInputStream(uri)?.use { stream ->
+                    BitmapFactory.decodeStream(stream)
+                }
+            }.getOrNull()
+            if (bmp != null) {
+                if (selectedSide == "front") {
+                    frontBgUri = uri
+                    frontBgBitmap = bmp
+                    statusMessage = "Front background artwork applied!"
+                } else {
+                    backBgUri = uri
+                    backBgBitmap = bmp
+                    statusMessage = "Back background artwork applied!"
+                }
+            } else {
+                statusMessage = "Could not decode chosen background image."
+            }
+        }
+    }
     var statusMessage by remember { mutableStateOf<String?>(null) }
     var lastExportedFile by remember { mutableStateOf<File?>(null) }
 
@@ -490,13 +522,27 @@ fun TemplateStudioEditorScreen(
         val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
 
-        val bgPaint = Paint().apply {
-            color = runCatching { Color.parseColor(cardBgHex) }.getOrDefault(Color.WHITE)
-            style = Paint.Style.FILL
-            isAntiAlias = true
-        }
         val cardRect = RectF(0f, 0f, width.toFloat(), height.toFloat())
-        canvas.drawRoundRect(cardRect, 32f, 32f, bgPaint)
+        val currentBgBmp = if (sideToRender == "front") frontBgBitmap else backBgBitmap
+
+        if (currentBgBmp != null) {
+            canvas.save()
+            val clipPath = Path().apply {
+                addRoundRect(cardRect, 32f, 32f, Path.Direction.CW)
+            }
+            canvas.clipPath(clipPath)
+            val src = Rect(0, 0, currentBgBmp.width, currentBgBmp.height)
+            val bgPaint = Paint(Paint.FILTER_BITMAP_FLAG).apply { isAntiAlias = true }
+            canvas.drawBitmap(currentBgBmp, src, cardRect, bgPaint)
+            canvas.restore()
+        } else {
+            val bgPaint = Paint().apply {
+                color = runCatching { Color.parseColor(cardBgHex) }.getOrDefault(Color.WHITE)
+                style = Paint.Style.FILL
+                isAntiAlias = true
+            }
+            canvas.drawRoundRect(cardRect, 32f, 32f, bgPaint)
+        }
 
         val headerPaint = Paint().apply {
             color = runCatching { Color.parseColor(primaryColorHex) }.getOrDefault(Color.rgb(24, 24, 27))
@@ -824,7 +870,7 @@ fun TemplateStudioEditorScreen(
 
                     Spacer(modifier = Modifier.height(10.dp))
 
-                    val previewBitmap = remember(frontLayers, backLayers, selectedSide, primaryColorHex, cardBgHex) {
+                    val previewBitmap = remember(frontLayers, backLayers, selectedSide, primaryColorHex, cardBgHex, frontBgBitmap, backBgBitmap) {
                         renderCardBitmap()
                     }
 
@@ -916,6 +962,47 @@ fun TemplateStudioEditorScreen(
                     Text("Card Styling & Banner Colors", fontWeight = FontWeight.Bold, fontSize = 15.sp)
                     Spacer(modifier = Modifier.height(8.dp))
 
+                    // Custom Background Artwork Picker (Front & Back)
+                    Text("CR80 Background Artwork (${selectedSide.uppercase()}):", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Button(
+                            onClick = {
+                                bgLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                            },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(Icons.Default.Image, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(if ((if (selectedSide == "front") frontBgBitmap else backBgBitmap) != null) "Change Artwork" else "Upload Artwork", fontSize = 12.sp)
+                        }
+
+                        if ((if (selectedSide == "front") frontBgBitmap else backBgBitmap) != null) {
+                            OutlinedButton(
+                                onClick = {
+                                    if (selectedSide == "front") {
+                                        frontBgBitmap = null
+                                        frontBgUri = null
+                                    } else {
+                                        backBgBitmap = null
+                                        backBgUri = null
+                                    }
+                                    statusMessage = "${selectedSide.uppercase()} background cleared to default."
+                                },
+                                modifier = Modifier.weight(0.7f)
+                            ) {
+                                Icon(Icons.Default.DeleteOutline, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Clear", fontSize = 12.sp)
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
                     Text("Header Banner Color Preset:", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Spacer(modifier = Modifier.height(6.dp))
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
