@@ -271,37 +271,117 @@ fun GovernmentFormsScreen(
                             val tokenVal = when (lToken.trim().lowercase()) {
                                 "{{full_name}}" -> fullName
                                 "{{first_name}}" -> firstName
+                                "{{middle_name}}" -> middleName
                                 "{{last_name}}" -> lastName
-                                "{{nida_number}}", "{{id_number}}" -> nationalId
+                                "{{nida_number}}" -> nationalId
+                                "{{licence_number}}" -> nationalId
+                                "{{nhif_number}}" -> nationalId
+                                "{{nrc_number}}", "{{reg_number}}" -> if (nrcRegNumber.isNotBlank()) nrcRegNumber else nationalId
+                                "{{id_number}}" -> nationalId
                                 "{{dob}}" -> dateOfBirth
                                 "{{gender}}" -> gender
+                                "{{phone}}" -> phone
                                 "{{expiry_date}}" -> expiryDate
-                                "{{blood_group}}" -> bloodGroup
+                                "{{issue_date}}" -> issueDate
+                                "{{blood_group}}", "{{blood_type}}" -> bloodGroup
                                 "{{licence_classes}}" -> selectedDrivingClasses.sorted().joinToString(", ")
                                 "{{authority}}" -> issuingAuthority
                                 "{{district}}" -> district
-                                "{{facility}}" -> nhifFacility
+                                "{{facility}}", "{{nhif_facility}}" -> nhifFacility
+                                "{{nhif_status}}", "{{status}}" -> nhifStatus
+                                "{{province}}" -> nrcProvince
+                                "{{chief}}", "{{village_chief}}" -> if (nrcChief.isNotBlank()) nrcChief else villageChief
+                                "{{village}}" -> nrcVillage
+                                "{{parents_birthplace}}", "{{parents_place_of_birth}}" -> nrcParentsPlaceOfBirth
+                                "{{registration_date}}" -> if (nrcRegistrationDate.isNotBlank()) nrcRegistrationDate else issueDate
+                                "{{place_of_birth}}" -> placeOfBirth
+                                "{{special_marks}}" -> specialMarks
+                                "{{mrz}}" -> "I<TZA${nationalId.filter { it.isLetterOrDigit() }.padEnd(10, '0')}<<<<<<<<<<<<\n${dateOfBirth.replace("-", "").take(6)}8F2812312TZA<<<<<<<<<<<<6"
+                                "{{barcode}}" -> nationalId
+                                "{{qr_code}}" -> "${selectedType.uppercase().replace(" ", "-")}-$nationalId"
                                 else -> ""
                             }
                             if (tokenVal.isNotBlank()) lText = tokenVal
 
-                            if (lType == "PHOTO" && photoBitmap != null) {
+                            if (lType == "PHOTO") {
                                 val pRect = RectF(lx, ly, lx + lw, ly + lh)
-                                val pSrc = android.graphics.Rect(0, 0, photoBitmap.width, photoBitmap.height)
-                                canvas.drawBitmap(photoBitmap, pSrc, pRect, null)
-                            } else if (lType == "SIGNATURE" && signatureLines.isNotEmpty()) {
+                                if (photoBitmap != null) {
+                                    val pSrc = android.graphics.Rect(0, 0, photoBitmap.width, photoBitmap.height)
+                                    canvas.drawBitmap(photoBitmap, pSrc, pRect, null)
+                                } else {
+                                    val pbPaint = Paint().apply { isAntiAlias = true; color = Color.rgb(244, 244, 245); style = Paint.Style.FILL }
+                                    canvas.drawRoundRect(pRect, 12f, 12f, pbPaint)
+                                    pbPaint.style = Paint.Style.STROKE
+                                    pbPaint.color = Color.rgb(212, 212, 216)
+                                    pbPaint.strokeWidth = 2f
+                                    canvas.drawRoundRect(pRect, 12f, 12f, pbPaint)
+                                    pbPaint.style = Paint.Style.FILL
+                                    pbPaint.color = Color.rgb(161, 161, 170)
+                                    pbPaint.textSize = 16f
+                                    pbPaint.isFakeBoldText = true
+                                    canvas.drawText("BIOMETRIC PHOTO", lx + 12f, ly + lh / 2f, pbPaint)
+                                }
+                            } else if (lType == "SIGNATURE") {
                                 val sRect = RectF(lx, ly, lx + lw, ly + lh)
                                 canvas.drawRoundRect(sRect, 6f, 6f, Paint().apply { color = Color.rgb(244, 244, 245); style = Paint.Style.FILL })
                                 val strokePaint = Paint().apply { color = Color.rgb(30, 58, 138); strokeWidth = 2.5f; style = Paint.Style.STROKE }
-                                val scaleX = lw / 280f
-                                val scaleY = lh / 120f
-                                for (line in signatureLines) {
-                                    for (i in 0 until line.size - 1) {
-                                        val p1 = line[i]
-                                        val p2 = line[i + 1]
-                                        canvas.drawLine(sRect.left + (p1.x * scaleX), sRect.top + (p1.y * scaleY), sRect.left + (p2.x * scaleX), sRect.top + (p2.y * scaleY), strokePaint)
+                                if (signatureLines.isNotEmpty()) {
+                                    val scaleX = lw / 280f
+                                    val scaleY = lh / 120f
+                                    for (line in signatureLines) {
+                                        for (i in 0 until line.size - 1) {
+                                            val p1 = line[i]
+                                            val p2 = line[i + 1]
+                                            canvas.drawLine(sRect.left + (p1.x * scaleX), sRect.top + (p1.y * scaleY), sRect.left + (p2.x * scaleX), sRect.top + (p2.y * scaleY), strokePaint)
+                                        }
                                     }
+                                } else {
+                                    strokePaint.color = Color.LTGRAY
+                                    canvas.drawLine(lx + 10f, ly + lh * 0.7f, lx + lw - 10f, ly + lh * 0.7f, strokePaint)
+                                    val lp = Paint().apply { isAntiAlias = true; color = Color.GRAY; textSize = 14f }
+                                    canvas.drawText("HOLDER SIGNATURE", lx + 12f, ly + lh - 4f, lp)
                                 }
+                            } else if (lType == "BARCODE") {
+                                val bPaint = Paint().apply { isAntiAlias = true; style = Paint.Style.FILL; color = Color.WHITE }
+                                canvas.drawRect(lx, ly, lx + lw, ly + lh, bPaint)
+                                bPaint.color = Color.BLACK
+                                var currentX = lx + 10f
+                                val endX = lx + lw - 10f
+                                var toggle = true
+                                while (currentX < endX) {
+                                    val barWidth = if (toggle) 6f else 3f
+                                    canvas.drawRect(currentX, ly + 4f, currentX + barWidth, ly + lh - 18f, bPaint)
+                                    currentX += barWidth + (if (toggle) 4f else 2f)
+                                    toggle = !toggle
+                                }
+                                bPaint.textSize = 14f
+                                bPaint.isFakeBoldText = true
+                                val barcodeText = lText.ifBlank { nationalId }.take(20)
+                                canvas.drawText(barcodeText, lx + 12f, ly + lh - 4f, bPaint)
+                            } else if (lType == "QRCODE") {
+                                val qPaint = Paint().apply { isAntiAlias = true; style = Paint.Style.FILL; color = Color.WHITE }
+                                canvas.drawRect(lx, ly, lx + lw, ly + lh, qPaint)
+                                qPaint.color = Color.BLACK
+                                qPaint.style = Paint.Style.STROKE
+                                qPaint.strokeWidth = 4f
+                                canvas.drawRect(lx + 4f, ly + 4f, lx + lw - 4f, ly + lh - 4f, qPaint)
+                                qPaint.style = Paint.Style.FILL
+                                canvas.drawRect(lx + 10f, ly + 10f, lx + 34f, ly + 34f, qPaint)
+                                canvas.drawRect(lx + lw - 34f, ly + 10f, lx + lw - 10f, ly + 34f, qPaint)
+                                canvas.drawRect(lx + 10f, ly + lh - 34f, lx + 34f, ly + lh - 10f, qPaint)
+                            } else if (lType == "BADGE") {
+                                val badgePaint = Paint().apply { isAntiAlias = true; style = Paint.Style.STROKE; strokeWidth = 3f; color = Color.rgb(202, 138, 4) }
+                                canvas.drawCircle(lx + lw / 2f, ly + lh / 2f, lw / 2f, badgePaint)
+                                badgePaint.style = Paint.Style.FILL
+                                badgePaint.textSize = 14f
+                                canvas.drawText(lText.ifBlank { "SEAL" }.take(8), lx + lw / 4f, ly + lh / 2f + 5f, badgePaint)
+                            } else if (lType == "SHAPE") {
+                                val sPaint = Paint().apply {
+                                    isAntiAlias = true
+                                    style = Paint.Style.FILL
+                                    color = runCatching { Color.parseColor(lColorHex) }.getOrDefault(Color.LTGRAY)
+                                }
+                                canvas.drawRoundRect(RectF(lx, ly, lx + lw, ly + lh), 8f, 8f, sPaint)
                             } else if (lType == "TEXT" && lText.isNotBlank()) {
                                 val lp = Paint().apply {
                                     color = runCatching { Color.parseColor(lColorHex) }.getOrDefault(Color.BLACK)

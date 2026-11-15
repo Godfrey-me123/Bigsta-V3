@@ -79,6 +79,166 @@ data class StudioLayer(
     val isLocked: Boolean = false
 )
 
+
+data class TokenDefinition(
+    val token: String,
+    val label: String,
+    val category: String
+)
+
+val allStudioTokens = listOf(
+    // Common / Personal
+    TokenDefinition("{{full_name}}", "Full Name", "Common"),
+    TokenDefinition("{{first_name}}", "First Name", "Common"),
+    TokenDefinition("{{middle_name}}", "Middle Name", "Common"),
+    TokenDefinition("{{last_name}}", "Last Name", "Common"),
+    TokenDefinition("{{id_number}}", "Document ID Number", "Common"),
+    TokenDefinition("{{dob}}", "Date of Birth", "Common"),
+    TokenDefinition("{{gender}}", "Sex / Gender", "Common"),
+    TokenDefinition("{{phone}}", "Phone Number", "Common"),
+    TokenDefinition("{{place_of_birth}}", "Place of Birth", "Common"),
+
+    // NIDA (National ID)
+    TokenDefinition("{{nida_number}}", "NIDA NIN Number", "NIDA"),
+    TokenDefinition("{{district}}", "District of Residence", "NIDA"),
+    TokenDefinition("{{mrz}}", "Machine Readable Zone (MRZ)", "NIDA"),
+
+    // Driving Licence
+    TokenDefinition("{{licence_number}}", "Driving Licence No.", "Driving Licence"),
+    TokenDefinition("{{licence_classes}}", "Vehicle Classes (A-G)", "Driving Licence"),
+    TokenDefinition("{{issue_date}}", "Issue Date", "Driving Licence"),
+    TokenDefinition("{{expiry_date}}", "Expiry Date", "Driving Licence"),
+    TokenDefinition("{{blood_group}}", "Blood Group (O+, A+)", "Driving Licence"),
+    TokenDefinition("{{authority}}", "Licensing Authority", "Driving Licence"),
+
+    // NHIF (Health Insurance)
+    TokenDefinition("{{nhif_number}}", "NHIF Membership Card No.", "NHIF"),
+    TokenDefinition("{{facility}}", "Designated Clinic / Hospital", "NHIF"),
+    TokenDefinition("{{nhif_status}}", "Membership Scheme / Status", "NHIF"),
+    TokenDefinition("{{employer}}", "Employer Sponsor", "NHIF"),
+
+    // NRC Zambia
+    TokenDefinition("{{nrc_number}}", "NRC Card Number (123456/78/1)", "NRC Zambia"),
+    TokenDefinition("{{province}}", "Province of Origin", "NRC Zambia"),
+    TokenDefinition("{{chief}}", "Chief / Village Authority", "NRC Zambia"),
+    TokenDefinition("{{village}}", "Village / Town", "NRC Zambia"),
+    TokenDefinition("{{parents_birthplace}}", "Parents' Birthplace", "NRC Zambia"),
+    TokenDefinition("{{registration_date}}", "Date of Registration", "NRC Zambia"),
+    TokenDefinition("{{special_marks}}", "Distinguishing Marks", "NRC Zambia"),
+
+    // Biometrics & Visuals
+    TokenDefinition("{{photo}}", "Biometric Photo Box", "Biometrics"),
+    TokenDefinition("{{signature}}", "Holder Signature Box", "Biometrics"),
+    TokenDefinition("{{barcode}}", "Code128 Card Barcode", "Biometrics"),
+    TokenDefinition("{{qr_code}}", "2D Verification QR Code", "Biometrics"),
+    TokenDefinition("{{security_seal}}", "Government Security Seal", "Biometrics")
+)
+
+fun getServicePresetDefaultName(category: String): String = when (category) {
+    "Driving Licence" -> "Tanzania Driving Licence Template"
+    "NHIF" -> "NHIF Membership Smart Card Template"
+    "NRC Zambia" -> "Zambia National Registration Card Template"
+    "Student ID" -> "Student Academic Identity Card"
+    "Employee Badge" -> "Corporate Employee Badge Template"
+    else -> "Tanzania National ID Template"
+}
+
+fun getServicePresetPrimaryColor(category: String): String = when (category) {
+    "Driving Licence" -> "#14532D" // Dark Green
+    "NHIF" -> "#0284C7" // Sky Blue
+    "NRC Zambia" -> "#854D0E" // Bronze / Amber
+    "Student ID" -> "#4B5563"
+    "Employee Badge" -> "#18181B"
+    else -> "#1E3A8A" // Deep Blue NIDA
+}
+
+fun getServicePresetFrontLayers(category: String): List<StudioLayer> = when (category) {
+    "Driving Licence" -> listOf(
+        StudioLayer("header_banner", "Agency Header Banner", StudioLayerType.TEXT, textValue = "JAMHURI YA MUUNGANO WA TANZANIA", xPercent = 5f, yPercent = 6f, fontSize = 24f, isBold = true, colorHex = "#FFFFFF"),
+        StudioLayer("doc_title", "Document Title", StudioLayerType.TEXT, textValue = "DRIVING LICENCE • LESENI YA UDEREVA", xPercent = 5f, yPercent = 12f, fontSize = 18f, isBold = false, colorHex = "#E4E4E7"),
+        StudioLayer("photo_box", "Portrait Photo Placeholder", StudioLayerType.PHOTO, bindingToken = "{{photo}}", xPercent = 5f, yPercent = 24f, widthPercent = 25f, heightPercent = 56f),
+        StudioLayer("f_name", "Driver Full Name", StudioLayerType.TEXT, bindingToken = "{{full_name}}", textValue = "GODFREY ELIAS MREMA", xPercent = 34f, yPercent = 26f, fontSize = 32f, isBold = true, colorHex = "#18181B"),
+        StudioLayer("f_licence_no", "Licence Number", StudioLayerType.TEXT, bindingToken = "{{licence_number}}", textValue = "DL-TZA-2024-88910", xPercent = 34f, yPercent = 40f, fontSize = 28f, isBold = true, colorHex = "#15803D"),
+        StudioLayer("f_classes", "Authorized Classes", StudioLayerType.TEXT, bindingToken = "{{licence_classes}}", textValue = "CLASSES: A, B, C, D", xPercent = 34f, yPercent = 54f, fontSize = 22f, isBold = true, colorHex = "#18181B"),
+        StudioLayer("f_blood_exp", "Blood Group & Expiry", StudioLayerType.TEXT, bindingToken = "{{blood_group}}", textValue = "BLOOD: O+   EXP: 2027-01-15", xPercent = 34f, yPercent = 66f, fontSize = 20f, colorHex = "#3F3F46"),
+        StudioLayer("f_auth", "Issuing Authority", StudioLayerType.TEXT, bindingToken = "{{authority}}", textValue = "AUTH: TRA MAINLAND / POLISI", xPercent = 34f, yPercent = 76f, fontSize = 18f, colorHex = "#52525B"),
+        StudioLayer("f_barcode", "Card Barcode (Code128)", StudioLayerType.BARCODE, bindingToken = "{{licence_number}}", textValue = "DLTZA202488910", xPercent = 34f, yPercent = 84f, widthPercent = 42f, heightPercent = 12f),
+        StudioLayer("f_qr", "Verification QR Code", StudioLayerType.QRCODE, bindingToken = "{{licence_number}}", textValue = "TRA-DL-VERIFIED-88910", xPercent = 80f, yPercent = 66f, widthPercent = 16f, heightPercent = 22f),
+        StudioLayer("f_seal", "Traffic Seal Badge", StudioLayerType.BADGE, textValue = "TRAFFIC POLICE", xPercent = 82f, yPercent = 24f, widthPercent = 13f, heightPercent = 18f)
+    )
+    "NHIF" -> listOf(
+        StudioLayer("header_banner", "Agency Header Banner", StudioLayerType.TEXT, textValue = "NATIONAL HEALTH INSURANCE FUND", xPercent = 5f, yPercent = 6f, fontSize = 24f, isBold = true, colorHex = "#FFFFFF"),
+        StudioLayer("doc_title", "Document Title", StudioLayerType.TEXT, textValue = "KITAMBULISHO CHA BIMA YA AFYA (NHIF)", xPercent = 5f, yPercent = 12f, fontSize = 18f, isBold = false, colorHex = "#E4E4E7"),
+        StudioLayer("photo_box", "Portrait Photo Placeholder", StudioLayerType.PHOTO, bindingToken = "{{photo}}", xPercent = 5f, yPercent = 24f, widthPercent = 25f, heightPercent = 56f),
+        StudioLayer("f_name", "Member Full Name", StudioLayerType.TEXT, bindingToken = "{{full_name}}", textValue = "NEEMA DAVID MALLYA", xPercent = 34f, yPercent = 26f, fontSize = 32f, isBold = true, colorHex = "#18181B"),
+        StudioLayer("f_nhif_no", "Membership Card No", StudioLayerType.TEXT, bindingToken = "{{nhif_number}}", textValue = "NHIF-102847593021", xPercent = 34f, yPercent = 42f, fontSize = 28f, isBold = true, colorHex = "#0284C7"),
+        StudioLayer("f_facility", "Designated Clinic/Hospital", StudioLayerType.TEXT, bindingToken = "{{facility}}", textValue = "HOSPITAL: MUHIMBILI (MNH-01)", xPercent = 34f, yPercent = 56f, fontSize = 22f, colorHex = "#18181B"),
+        StudioLayer("f_status", "Membership Status", StudioLayerType.TEXT, bindingToken = "{{nhif_status}}", textValue = "STATUS: ACTIVE • BIMA YA JAMII", xPercent = 34f, yPercent = 68f, fontSize = 20f, isBold = true, colorHex = "#15803D"),
+        StudioLayer("f_barcode", "Card Barcode (Code128)", StudioLayerType.BARCODE, bindingToken = "{{nhif_number}}", textValue = "102847593021", xPercent = 34f, yPercent = 80f, widthPercent = 42f, heightPercent = 14f),
+        StudioLayer("f_qr", "Verification QR Code", StudioLayerType.QRCODE, bindingToken = "{{nhif_number}}", textValue = "NHIF-VALID-102847593021", xPercent = 80f, yPercent = 66f, widthPercent = 16f, heightPercent = 22f),
+        StudioLayer("f_seal", "Health Security Seal", StudioLayerType.BADGE, textValue = "NHIF SEAL", xPercent = 82f, yPercent = 24f, widthPercent = 13f, heightPercent = 18f)
+    )
+    "NRC Zambia" -> listOf(
+        StudioLayer("header_banner", "Agency Header Banner", StudioLayerType.TEXT, textValue = "REPUBLIC OF ZAMBIA", xPercent = 5f, yPercent = 6f, fontSize = 24f, isBold = true, colorHex = "#FFFFFF"),
+        StudioLayer("doc_title", "Document Title", StudioLayerType.TEXT, textValue = "NATIONAL REGISTRATION CARD", xPercent = 5f, yPercent = 12f, fontSize = 18f, isBold = false, colorHex = "#E4E4E7"),
+        StudioLayer("photo_box", "Portrait Photo Placeholder", StudioLayerType.PHOTO, bindingToken = "{{photo}}", xPercent = 5f, yPercent = 24f, widthPercent = 25f, heightPercent = 56f),
+        StudioLayer("f_name", "Full Name Field", StudioLayerType.TEXT, bindingToken = "{{full_name}}", textValue = "CHILUFYA BWALYA MWANSA", xPercent = 34f, yPercent = 26f, fontSize = 32f, isBold = true, colorHex = "#18181B"),
+        StudioLayer("f_nrc_no", "NRC Number Field", StudioLayerType.TEXT, bindingToken = "{{nrc_number}}", textValue = "123456/78/1", xPercent = 34f, yPercent = 40f, fontSize = 30f, isBold = true, colorHex = "#B45309"),
+        StudioLayer("f_dob_sex", "Date of Birth & Sex", StudioLayerType.TEXT, bindingToken = "{{dob}}", textValue = "DOB: 14/08/1993 • SEX: M", xPercent = 34f, yPercent = 54f, fontSize = 22f, colorHex = "#3F3F46"),
+        StudioLayer("f_pob", "Place of Birth", StudioLayerType.TEXT, bindingToken = "{{place_of_birth}}", textValue = "POB: LUSAKA GENERAL HOSPITAL", xPercent = 34f, yPercent = 66f, fontSize = 20f, colorHex = "#3F3F46"),
+        StudioLayer("f_dist_prov", "District & Province", StudioLayerType.TEXT, bindingToken = "{{district}}", textValue = "DISTRICT: LUSAKA • PROV: LUSAKA", xPercent = 34f, yPercent = 78f, fontSize = 19f, isBold = true, colorHex = "#18181B"),
+        StudioLayer("f_sign", "Thumbprint/Signature Box", StudioLayerType.SIGNATURE, bindingToken = "{{signature}}", xPercent = 76f, yPercent = 66f, widthPercent = 20f, heightPercent = 24f),
+        StudioLayer("f_seal", "Coat of Arms Badge", StudioLayerType.BADGE, textValue = "COAT OF ARMS", xPercent = 82f, yPercent = 24f, widthPercent = 13f, heightPercent = 18f)
+    )
+    else -> listOf(
+        StudioLayer("header_banner", "Agency Header Banner", StudioLayerType.TEXT, textValue = "JAMHURI YA MUUNGANO WA TANZANIA", xPercent = 5f, yPercent = 6f, fontSize = 24f, isBold = true, colorHex = "#FFFFFF"),
+        StudioLayer("doc_title", "Document Title", StudioLayerType.TEXT, textValue = "NATIONAL IDENTIFICATION CARD", xPercent = 5f, yPercent = 12f, fontSize = 18f, isBold = false, colorHex = "#E4E4E7"),
+        StudioLayer("photo_box", "Portrait Photo Placeholder", StudioLayerType.PHOTO, bindingToken = "{{photo}}", xPercent = 5f, yPercent = 24f, widthPercent = 25f, heightPercent = 56f),
+        StudioLayer("f_name", "Full Name Field", StudioLayerType.TEXT, bindingToken = "{{full_name}}", textValue = "AMINA JUMA HASSAN", xPercent = 34f, yPercent = 26f, fontSize = 32f, isBold = true, colorHex = "#18181B"),
+        StudioLayer("f_id", "National ID Number", StudioLayerType.TEXT, bindingToken = "{{nida_number}}", textValue = "19950612-14102-00001-22", xPercent = 34f, yPercent = 42f, fontSize = 28f, isBold = true, colorHex = "#0284C7"),
+        StudioLayer("f_dob", "Date of Birth & Gender", StudioLayerType.TEXT, bindingToken = "{{dob}}", textValue = "DOB: 12/06/1995 • GENDER: F", xPercent = 34f, yPercent = 58f, fontSize = 22f, isBold = false, colorHex = "#3F3F46"),
+        StudioLayer("f_district", "District of Residence", StudioLayerType.TEXT, bindingToken = "{{district}}", textValue = "DISTRICT: ILALA, DAR ES SALAAM", xPercent = 34f, yPercent = 68f, fontSize = 20f, colorHex = "#52525B"),
+        StudioLayer("f_barcode", "Card Barcode (Code128)", StudioLayerType.BARCODE, bindingToken = "{{id_number}}", textValue = "19950612141020000122", xPercent = 34f, yPercent = 78f, widthPercent = 40f, heightPercent = 14f),
+        StudioLayer("f_qr", "Verification QR Code", StudioLayerType.QRCODE, bindingToken = "{{nida_number}}", textValue = "BIGSTA-VERIFIED-19950612", xPercent = 78f, yPercent = 68f, widthPercent = 17f, heightPercent = 22f),
+        StudioLayer("f_seal", "Official Seal", StudioLayerType.BADGE, textValue = "COAT OF ARMS", xPercent = 82f, yPercent = 24f, widthPercent = 13f, heightPercent = 18f)
+    )
+}
+
+fun getServicePresetBackLayers(category: String): List<StudioLayer> = when (category) {
+    "Driving Licence" -> listOf(
+        StudioLayer("b_header", "Back Header Terms", StudioLayerType.TEXT, textValue = "VEHICLE CLASSIFICATION ENDORSEMENTS", xPercent = 5f, yPercent = 8f, fontSize = 18f, isBold = true, colorHex = "#18181B"),
+        StudioLayer("b_terms", "Categories Legend", StudioLayerType.TEXT, textValue = "A: Motorcycles | B: Passenger Cars | C: Commercial PSV | D: Heavy Goods", xPercent = 5f, yPercent = 18f, fontSize = 16f, isBold = false, colorHex = "#52525B"),
+        StudioLayer("b_notice", "Legal Notice", StudioLayerType.TEXT, textValue = "Holder must carry licence while operating vehicle. Subject to Traffic Act.", xPercent = 5f, yPercent = 28f, fontSize = 14f, colorHex = "#71717A"),
+        StudioLayer("b_sign", "Signature of Driver", StudioLayerType.SIGNATURE, bindingToken = "{{signature}}", xPercent = 5f, yPercent = 42f, widthPercent = 40f, heightPercent = 22f),
+        StudioLayer("b_authority", "Issuing Authority", StudioLayerType.TEXT, bindingToken = "{{authority}}", textValue = "COMMISSIONER FOR TRAFFIC POLICE", xPercent = 52f, yPercent = 48f, fontSize = 18f, isBold = true, colorHex = "#18181B"),
+        StudioLayer("b_barcode", "Back Verification Barcode", StudioLayerType.BARCODE, bindingToken = "{{licence_number}}", textValue = "DLTZA202488910", xPercent = 52f, yPercent = 68f, widthPercent = 42f, heightPercent = 18f)
+    )
+    "NHIF" -> listOf(
+        StudioLayer("b_header", "Emergency Notice", StudioLayerType.TEXT, textValue = "HUDUMA YA DHARURA / HOTLINE: 0800 110 074", xPercent = 5f, yPercent = 8f, fontSize = 18f, isBold = true, colorHex = "#DC2626"),
+        StudioLayer("b_terms", "Card Use Terms", StudioLayerType.TEXT, textValue = "Kadi hii inatambulika katika hospitali na vituo vyote vilivyoidhinishwa na NHIF.", xPercent = 5f, yPercent = 20f, fontSize = 16f, isBold = false, colorHex = "#52525B"),
+        StudioLayer("b_sign", "Signature of Member", StudioLayerType.SIGNATURE, bindingToken = "{{signature}}", xPercent = 5f, yPercent = 40f, widthPercent = 40f, heightPercent = 22f),
+        StudioLayer("b_authority", "Scheme Authority", StudioLayerType.TEXT, textValue = "DIRECTOR GENERAL • NHIF TANZANIA", xPercent = 52f, yPercent = 46f, fontSize = 18f, isBold = true, colorHex = "#18181B"),
+        StudioLayer("b_qr", "Verification QR Code", StudioLayerType.QRCODE, bindingToken = "{{nhif_number}}", textValue = "NHIF-BENEFICIARY-102847593021", xPercent = 55f, yPercent = 64f, widthPercent = 20f, heightPercent = 26f)
+    )
+    "NRC Zambia" -> listOf(
+        StudioLayer("b_header", "Jurisdiction Header", StudioLayerType.TEXT, textValue = "RECORD OF JURISDICTION • NRC ZAMBIA", xPercent = 5f, yPercent = 8f, fontSize = 18f, isBold = true, colorHex = "#18181B"),
+        StudioLayer("b_chief_village", "Chief & Village", StudioLayerType.TEXT, bindingToken = "{{chief}}", textValue = "CHIEF: MWAMBA • VILLAGE/TOWN: KABWATA", xPercent = 5f, yPercent = 22f, fontSize = 18f, isBold = true, colorHex = "#18181B"),
+        StudioLayer("b_parents_pob", "Parents' Place of Birth", StudioLayerType.TEXT, bindingToken = "{{parents_birthplace}}", textValue = "PARENTS' BIRTHPLACE: KASAMA, NORTHERN", xPercent = 5f, yPercent = 36f, fontSize = 18f, colorHex = "#3F3F46"),
+        StudioLayer("b_reg_date", "Date of Registration", StudioLayerType.TEXT, bindingToken = "{{registration_date}}", textValue = "DATE OF REGISTRATION: 18/09/2010", xPercent = 5f, yPercent = 50f, fontSize = 18f, colorHex = "#3F3F46"),
+        StudioLayer("b_marks", "Special Marks", StudioLayerType.TEXT, bindingToken = "{{special_marks}}", textValue = "SPECIAL MARKS: NONE", xPercent = 5f, yPercent = 62f, fontSize = 17f, colorHex = "#52525B"),
+        StudioLayer("b_authority", "Registrar Authority", StudioLayerType.TEXT, textValue = "CHIEF REGISTRAR OF PERSONS • ZAMBIA", xPercent = 5f, yPercent = 76f, fontSize = 18f, isBold = true, colorHex = "#18181B"),
+        StudioLayer("b_barcode", "Back Barcode", StudioLayerType.BARCODE, bindingToken = "{{nrc_number}}", textValue = "123456781", xPercent = 55f, yPercent = 72f, widthPercent = 40f, heightPercent = 16f)
+    )
+    else -> listOf(
+        StudioLayer("b_header", "Back Header Terms", StudioLayerType.TEXT, textValue = "MALI YA SERIKALI YA JAMHURI YA MUUNGANO WA TANZANIA", xPercent = 5f, yPercent = 8f, fontSize = 18f, isBold = true, colorHex = "#18181B"),
+        StudioLayer("b_terms", "Legal Notice Text", StudioLayerType.TEXT, textValue = "Kadi hii inapaswa kurudishwa ofisi ya NIDA iliyo karibu ikipotea au kupatikana.", xPercent = 5f, yPercent = 20f, fontSize = 16f, isBold = false, colorHex = "#52525B"),
+        StudioLayer("b_sign", "Signature of Holder", StudioLayerType.SIGNATURE, bindingToken = "{{signature}}", xPercent = 5f, yPercent = 40f, widthPercent = 40f, heightPercent = 22f),
+        StudioLayer("b_authority", "Issuing Authority", StudioLayerType.TEXT, textValue = "DIRECTOR GENERAL • NIDA TANZANIA", xPercent = 55f, yPercent = 46f, fontSize = 18f, isBold = true, colorHex = "#18181B"),
+        StudioLayer("b_district", "Issue District", StudioLayerType.TEXT, bindingToken = "{{district}}", textValue = "ISSUED AT: ILALA DISTRICT", xPercent = 55f, yPercent = 56f, fontSize = 16f, colorHex = "#52525B"),
+        StudioLayer("b_mrz", "Machine Readable Zone (MRZ)", StudioLayerType.TEXT, bindingToken = "{{mrz}}", textValue = "I<TZA199506124<<<<<<<<<<<<<<<<<<\n8501018F2812312TZA<<<<<<<<<<<<6", xPercent = 5f, yPercent = 74f, fontSize = 20f, isBold = true, colorHex = "#18181B")
+    )
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TemplateStudioEditorScreen(
@@ -90,23 +250,9 @@ fun TemplateStudioEditorScreen(
     val cachedTemplates by viewModel.cachedTemplates.collectAsStateWithLifecycle()
 
     val categories = listOf("NIDA", "Driving Licence", "NHIF", "NRC Zambia", "Student ID", "Employee Badge", "Custom")
-    val bindingTokens = listOf(
-        "{{full_name}}",
-        "{{first_name}}",
-        "{{last_name}}",
-        "{{nida_number}}",
-        "{{id_number}}",
-        "{{dob}}",
-        "{{gender}}",
-        "{{expiry_date}}",
-        "{{blood_group}}",
-        "{{licence_classes}}",
-        "{{authority}}",
-        "{{district}}",
-        "{{facility}}",
-        "{{signature}}",
-        "{{photo}}"
-    )
+    val bindingTokens = allStudioTokens.map { it.token }
+    val tokenCategoryFilters = listOf("All", "Common", "NIDA", "Driving Licence", "NHIF", "NRC Zambia", "Biometrics")
+    var selectedTokenFilter by remember { mutableStateOf("All") }
     val colorPresets = listOf("#18181B", "#1E3A8A", "#14532D", "#7F1D1D", "#854D0E", "#0284C7", "#D97706", "#4B5563")
 
     var templateId by remember { mutableStateOf<String?>(null) }
@@ -944,6 +1090,24 @@ fun TemplateStudioEditorScreen(
                         }
                     }
 
+                    Spacer(modifier = Modifier.height(8.dp))
+                    FilledTonalButton(
+                        onClick = {
+                            frontLayers = getServicePresetFrontLayers(selectedCategory)
+                            backLayers = getServicePresetBackLayers(selectedCategory)
+                            primaryColorHex = getServicePresetPrimaryColor(selectedCategory)
+                            templateName = getServicePresetDefaultName(selectedCategory)
+                            selectedLayerId = (if (selectedSide == "front") frontLayers else backLayers).firstOrNull()?.id ?: ""
+                            statusMessage = "Loaded official $selectedCategory layout preset with all service elements!"
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                    ) {
+                        Icon(Icons.Default.AutoFixHigh, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Apply Official $selectedCategory Preset Layers", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    }
+
                     Spacer(modifier = Modifier.height(10.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -1034,7 +1198,6 @@ fun TemplateStudioEditorScreen(
                     ) {
                         Text("${selectedSide.uppercase()} Layer Stack (${currentLayers.size})", fontWeight = FontWeight.Bold, fontSize = 15.sp)
                         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            // Add Layer button
                             IconButton(
                                 onClick = {
                                     val newLayer = StudioLayer(
@@ -1051,6 +1214,82 @@ fun TemplateStudioEditorScreen(
                             ) {
                                 Icon(Icons.Default.AddBox, contentDescription = "Add Layer")
                             }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text("Quick Add Elements:", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(modifier = Modifier.height(2.dp))
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        item {
+                            AssistChip(
+                                onClick = {
+                                    val newLayer = StudioLayer("f_txt_${System.currentTimeMillis()}", "Text Field", StudioLayerType.TEXT, textValue = "SAMPLE TEXT", xPercent = 10f, yPercent = 50f)
+                                    updateCurrentLayers(currentLayers + newLayer)
+                                    selectedLayerId = newLayer.id
+                                },
+                                label = { Text("+ Text", fontSize = 11.sp) }
+                            )
+                        }
+                        item {
+                            AssistChip(
+                                onClick = {
+                                    val newLayer = StudioLayer("f_photo_${System.currentTimeMillis()}", "Photo Placeholder", StudioLayerType.PHOTO, bindingToken = "{{photo}}", xPercent = 5f, yPercent = 25f, widthPercent = 25f, heightPercent = 50f)
+                                    updateCurrentLayers(currentLayers + newLayer)
+                                    selectedLayerId = newLayer.id
+                                },
+                                label = { Text("+ Photo Box", fontSize = 11.sp) }
+                            )
+                        }
+                        item {
+                            AssistChip(
+                                onClick = {
+                                    val newLayer = StudioLayer("f_sign_${System.currentTimeMillis()}", "Signature Box", StudioLayerType.SIGNATURE, bindingToken = "{{signature}}", xPercent = 10f, yPercent = 65f, widthPercent = 35f, heightPercent = 20f)
+                                    updateCurrentLayers(currentLayers + newLayer)
+                                    selectedLayerId = newLayer.id
+                                },
+                                label = { Text("+ Signature", fontSize = 11.sp) }
+                            )
+                        }
+                        item {
+                            AssistChip(
+                                onClick = {
+                                    val newLayer = StudioLayer("f_bar_${System.currentTimeMillis()}", "Barcode (Code128)", StudioLayerType.BARCODE, bindingToken = "{{id_number}}", textValue = "1234567890", xPercent = 10f, yPercent = 75f, widthPercent = 40f, heightPercent = 14f)
+                                    updateCurrentLayers(currentLayers + newLayer)
+                                    selectedLayerId = newLayer.id
+                                },
+                                label = { Text("+ Barcode", fontSize = 11.sp) }
+                            )
+                        }
+                        item {
+                            AssistChip(
+                                onClick = {
+                                    val newLayer = StudioLayer("f_qr_${System.currentTimeMillis()}", "Verification QR Code", StudioLayerType.QRCODE, bindingToken = "{{id_number}}", textValue = "VERIFIED-ID", xPercent = 75f, yPercent = 65f, widthPercent = 18f, heightPercent = 22f)
+                                    updateCurrentLayers(currentLayers + newLayer)
+                                    selectedLayerId = newLayer.id
+                                },
+                                label = { Text("+ QR Code", fontSize = 11.sp) }
+                            )
+                        }
+                        item {
+                            AssistChip(
+                                onClick = {
+                                    val newLayer = StudioLayer("f_seal_${System.currentTimeMillis()}", "Security Seal", StudioLayerType.BADGE, textValue = "SEAL", xPercent = 80f, yPercent = 20f, widthPercent = 14f, heightPercent = 18f)
+                                    updateCurrentLayers(currentLayers + newLayer)
+                                    selectedLayerId = newLayer.id
+                                },
+                                label = { Text("+ Seal", fontSize = 11.sp) }
+                            )
+                        }
+                        item {
+                            AssistChip(
+                                onClick = {
+                                    val newLayer = StudioLayer("f_shape_${System.currentTimeMillis()}", "Accent Shape", StudioLayerType.SHAPE, colorHex = primaryColorHex, xPercent = 5f, yPercent = 90f, widthPercent = 90f, heightPercent = 4f)
+                                    updateCurrentLayers(currentLayers + newLayer)
+                                    selectedLayerId = newLayer.id
+                                },
+                                label = { Text("+ Shape", fontSize = 11.sp) }
+                            )
                         }
                     }
 
@@ -1153,18 +1392,44 @@ fun TemplateStudioEditorScreen(
                             Spacer(modifier = Modifier.height(8.dp))
                         }
 
-                        Text("Bind Dynamic Token:", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("Filter Tokens by Service:", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Spacer(modifier = Modifier.height(4.dp))
                         LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            items(bindingTokens) { token ->
+                            items(tokenCategoryFilters) { tCat ->
                                 FilterChip(
-                                    selected = layer.bindingToken == token,
+                                    selected = selectedTokenFilter.equals(tCat, ignoreCase = true),
+                                    onClick = { selectedTokenFilter = tCat },
+                                    label = { Text(tCat, fontSize = 11.sp) }
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text("Bind Dynamic Field Token:", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        val displayedTokens = remember(selectedTokenFilter) {
+                            if (selectedTokenFilter == "All") allStudioTokens
+                            else allStudioTokens.filter { it.category.equals(selectedTokenFilter, ignoreCase = true) }
+                        }
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            items(displayedTokens) { tokenDef ->
+                                val isBound = layer.bindingToken == tokenDef.token
+                                FilterChip(
+                                    selected = isBound,
                                     onClick = {
-                                        val nextToken = if (layer.bindingToken == token) "" else token
+                                        val nextToken = if (isBound) "" else tokenDef.token
                                         updateSelectedLayer { it.copy(bindingToken = nextToken) }
                                     },
-                                    label = { Text(token, fontSize = 10.sp) }
+                                    label = { Text("${tokenDef.label} (${tokenDef.token})", fontSize = 11.sp) }
                                 )
+                            }
+                        }
+                        if (layer.bindingToken.isNotBlank()) {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            TextButton(onClick = { updateSelectedLayer { it.copy(bindingToken = "") } }) {
+                                Icon(Icons.Default.Clear, contentDescription = null, modifier = Modifier.size(14.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Clear Token Binding (${layer.bindingToken})", fontSize = 11.sp)
                             }
                         }
 
