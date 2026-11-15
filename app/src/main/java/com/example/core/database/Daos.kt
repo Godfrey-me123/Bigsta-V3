@@ -52,6 +52,9 @@ interface CachedTemplateDao {
 
     @Query("UPDATE cached_templates SET localCachedPath = :localPath WHERE id = :id")
     suspend fun updateLocalPath(id: String, localPath: String)
+
+    @Query("DELETE FROM cached_templates WHERE id = :id")
+    suspend fun deleteById(id: String)
 }
 
 @Dao

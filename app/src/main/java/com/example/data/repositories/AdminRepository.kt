@@ -162,6 +162,100 @@ class AdminRepository(
         }
     }
 
+    suspend fun deleteTemplate(templateId: String): ApiResult<Unit> {
+        val token = when (val auth = requireAdminSession()) {
+            is ApiResult.Success -> auth.data
+            is ApiResult.Error -> return auth
+        }
+        val res = restClient.deleteRest(
+            table = "templates",
+            filterQuery = "id=eq.$templateId",
+            accessToken = token
+        )
+        return when (res) {
+            is ApiResult.Error -> res
+            is ApiResult.Success -> ApiResult.Success(Unit)
+        }
+    }
+
+    suspend fun reassignTemplateCategory(templateId: String, newCategory: String): ApiResult<TemplateDto> {
+        val token = when (val auth = requireAdminSession()) {
+            is ApiResult.Success -> auth.data
+            is ApiResult.Error -> return auth
+        }
+        val body = """{
+            "document_category_id": "$newCategory",
+            "service_type": "$newCategory",
+            "updated_at": "${java.time.Instant.now()}"
+        }"""
+        val res = restClient.patchRest(
+            table = "templates",
+            filterQuery = "id=eq.$templateId",
+            bodyJson = body,
+            accessToken = token
+        )
+        return when (res) {
+            is ApiResult.Error -> res
+            is ApiResult.Success -> {
+                try {
+                    val updated = restClient.json.decodeFromString<List<TemplateDto>>(res.data).firstOrNull()
+                    if (updated != null) ApiResult.Success(updated)
+                    else ApiResult.Error("Template category update returned no row.")
+                } catch (e: Exception) {
+                    ApiResult.Error("Template decode failed: ${e.localizedMessage}")
+                }
+            }
+        }
+    }
+
+    suspend fun saveOrUpdateTemplate(
+        id: String? = null,
+        name: String,
+        category: String,
+        side: String,
+        backgroundUrl: String? = null,
+        isActive: Boolean = true,
+        isUniversal: Boolean = false
+    ): ApiResult<TemplateDto> {
+        val token = when (val auth = requireAdminSession()) {
+            is ApiResult.Success -> auth.data
+            is ApiResult.Error -> return auth
+        }
+        val safeName = name.trim().ifBlank { "$category Template" }
+        val templateId = id?.takeIf { it.isNotBlank() } ?: "tpl_${System.currentTimeMillis()}"
+        val body = """{
+            "id": "$templateId",
+            "name": "${safeName.replace(""", "\"")}",
+            "template_name": "${safeName.replace(""", "\"")}",
+            "document_category_id": "$category",
+            "service_type": "$category",
+            "side": "${side.lowercase()}",
+            "is_active": $isActive,
+            "is_universal": $isUniversal,
+            ${if (!backgroundUrl.isNullOrBlank()) """"background_url": "${backgroundUrl.replace(""", "\"")}",""" else ""}
+            "updated_at": "${java.time.Instant.now()}"
+        }"""
+
+        val res = restClient.postRest(
+            table = "templates",
+            bodyJson = body,
+            accessToken = token,
+            upsertOnConflict = "id"
+        )
+        return when (res) {
+            is ApiResult.Error -> res
+            is ApiResult.Success -> {
+                try {
+                    val saved = restClient.json.decodeFromString<List<TemplateDto>>(res.data).firstOrNull()
+                    if (saved != null) ApiResult.Success(saved)
+                    else ApiResult.Error("Template save returned no row.")
+                } catch (e: Exception) {
+                    ApiResult.Error("Failed to decode saved template: ${e.localizedMessage}")
+                }
+            }
+        }
+    }
+
     suspend fun fetchSmsMonitorLogs(): ApiResult<String> {
         val token = when (val auth = requireAdminSession()) {
             is ApiResult.Success -> auth.data

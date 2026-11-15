@@ -149,6 +149,78 @@ class AdminViewModel(
         }
     }
 
+    fun deleteTemplate(templateId: String) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null, actionMessage = null)
+            when (val res = adminRepository.deleteTemplate(templateId)) {
+                is ApiResult.Success -> {
+                    val updatedList = _uiState.value.templates.filterNot { it.id == templateId }
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        templates = updatedList,
+                        actionMessage = "Template $templateId deleted."
+                    )
+                }
+                is ApiResult.Error -> {
+                    _uiState.value = _uiState.value.copy(isLoading = false, errorMessage = res.message)
+                }
+            }
+        }
+    }
+
+    fun reassignTemplateCategory(templateId: String, newCategory: String) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null, actionMessage = null)
+            when (val res = adminRepository.reassignTemplateCategory(templateId, newCategory)) {
+                is ApiResult.Success -> {
+                    val updatedList = _uiState.value.templates.map {
+                        if (it.id == templateId) res.data else it
+                    }
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        templates = updatedList,
+                        actionMessage = "Template reassigned to $newCategory."
+                    )
+                }
+                is ApiResult.Error -> {
+                    _uiState.value = _uiState.value.copy(isLoading = false, errorMessage = res.message)
+                }
+            }
+        }
+    }
+
+    fun saveOrUpdateTemplate(
+        id: String? = null,
+        name: String,
+        category: String,
+        side: String,
+        backgroundUrl: String? = null,
+        isActive: Boolean = true,
+        isUniversal: Boolean = false
+    ) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null, actionMessage = null)
+            when (val res = adminRepository.saveOrUpdateTemplate(id, name, category, side, backgroundUrl, isActive, isUniversal)) {
+                is ApiResult.Success -> {
+                    val existingIndex = _uiState.value.templates.indexOfFirst { it.id == res.data.id }
+                    val updatedList = if (existingIndex >= 0) {
+                        _uiState.value.templates.map { if (it.id == res.data.id) res.data else it }
+                    } else {
+                        listOf(res.data) + _uiState.value.templates
+                    }
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        templates = updatedList,
+                        actionMessage = "Template '${res.data.name}' saved to cloud."
+                    )
+                }
+                is ApiResult.Error -> {
+                    _uiState.value = _uiState.value.copy(isLoading = false, errorMessage = res.message)
+                }
+            }
+        }
+    }
+
     fun clearMessages() {
         _uiState.value = _uiState.value.copy(errorMessage = null, actionMessage = null)
     }

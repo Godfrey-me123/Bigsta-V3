@@ -150,4 +150,112 @@ class TemplateRepository(
             }
         }
     }
+
+    suspend fun saveTemplate(
+        id: String? = null,
+        name: String,
+        category: String,
+        side: String,
+        backgroundUrl: String? = null,
+        isActive: Boolean = true,
+        isUniversal: Boolean = false,
+        layersJson: String = "[]"
+    ): ApiResult<TemplateDto> {
+        val session = sessionManager.currentSession()
+        val safeName = name.trim().ifBlank { "$category Template" }
+        val templateId = id?.takeIf { it.isNotBlank() } ?: "tpl_${System.currentTimeMillis()}"
+
+        // Persist to local Room cache first for offline instant availability
+        cachedTemplateDao.upsertAll(
+            listOf(
+                CachedTemplateEntity(
+                    id = templateId,
+                    name = safeName,
+                    documentCategoryId = category,
+                    templateCardId = templateId,
+                    side = side.lowercase(),
+                    backgroundUrl = backgroundUrl,
+                    localCachedPath = null,
+                    isActive = isActive,
+                    layersJson = layersJson
+                )
+            )
+        )
+
+        val localResult = TemplateDto(
+            id = templateId,
+            name = safeName,
+            category = category,
+            documentCategoryId = category,
+            templateCardId = templateId,
+            side = side.lowercase(),
+            backgroundUrl = backgroundUrl,
+            isActive = isActive
+        )
+
+        // If authenticated, sync directly with cloud Supabase templates table
+        if (session.isAuthenticated) {
+            val body = """{
+                "id": "$templateId",
+                "name": "${safeName.replace(""", "\"")}",
+                "template_name": "${safeName.replace(""", "\"")}",
+                "document_category_id": "$category",
+                "service_type": "$category",
+                "side": "${side.lowercase()}",
+                "is_active": $isActive,
+                "is_universal": $isUniversal,
+                ${if (!backgroundUrl.isNullOrBlank()) """"background_url": "${backgroundUrl.replace(""", "\"")}",""" else ""}
+                "updated_at": "${java.time.Instant.now()}"
+            }"""
+            val res = restClient.postRest(
+                table = "templates",
+                bodyJson = body,
+                accessToken = session.accessToken,
+                upsertOnConflict = "id"
+            )
+            return when (res) {
+                is ApiResult.Success -> {
+                    try {
+                        val parsed = restClient.json.decodeFromString<List<TemplateDto>>(res.data).firstOrNull()
+                        ApiResult.Success(parsed ?: localResult)
+                    } catch (e: Exception) {
+                        ApiResult.Success(localResult)
+                    }
+                }
+                is ApiResult.Error -> ApiResult.Success(localResult)
+            }
+        }
+
+        return ApiResult.Success(localResult)
+    }
+
+    suspend fun deleteTemplate(templateId: String): ApiResult<Unit> {
+        val session = sessionManager.currentSession()
+        cachedTemplateDao.deleteById(templateId)
+        if (session.isAuthenticated) {
+            restClient.deleteRest(
+                table = "templates",
+                filterQuery = "id=eq.$templateId",
+                accessToken = session.accessToken
+            )
+        }
+        return ApiResult.Success(Unit)
+    }
+
+    suspend fun uploadTemplateBackground(
+        bytes: ByteArray,
+        mimeType: String
+    ): ApiResult<String> {
+        val session = sessionManager.currentSession()
+        if (!session.isAuthenticated) return ApiResult.Error("Sign in required to upload backgrounds.")
+        val ext = if (mimeType.contains("png")) "png" else "jpg"
+        val path = "templates/${session.userId}_${System.currentTimeMillis()}.$ext"
+        return restClient.uploadStorageObject(
+            bucket = "template_backgrounds",
+            objectPath = path,
+            bytes = bytes,
+            contentType = mimeType,
+            accessToken = session.accessToken
+        )
+    }
 }

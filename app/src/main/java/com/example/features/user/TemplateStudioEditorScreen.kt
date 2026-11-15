@@ -1,5 +1,8 @@
 package com.example.features.user
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Canvas
@@ -37,7 +40,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.core.database.CachedTemplateEntity
 import com.example.ui.components.SolidSectionCard
+import org.json.JSONArray
+import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
 
@@ -47,7 +54,8 @@ enum class StudioLayerType(val label: String) {
     BARCODE("Barcode (Code128)"),
     QRCODE("QR Code 2D"),
     SIGNATURE("Signature Box"),
-    BADGE("Security Seal")
+    BADGE("Security Seal"),
+    SHAPE("Accent Shape")
 }
 
 data class StudioLayer(
@@ -64,7 +72,8 @@ data class StudioLayer(
     val isBold: Boolean = false,
     val colorHex: String = "#18181B",
     val alignment: String = "LEFT",
-    val isVisible: Boolean = true
+    val isVisible: Boolean = true,
+    val isLocked: Boolean = false
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -74,8 +83,10 @@ fun TemplateStudioEditorScreen(
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
+    val session by viewModel.session.collectAsStateWithLifecycle()
+    val cachedTemplates by viewModel.cachedTemplates.collectAsStateWithLifecycle()
 
-    val categories = listOf("NIDA", "Driving Licence", "NHIF", "NRC Zambia", "Student ID", "Employee Badge")
+    val categories = listOf("NIDA", "Driving Licence", "NHIF", "NRC Zambia", "Student ID", "Employee Badge", "Custom")
     val bindingTokens = listOf(
         "{{full_name}}",
         "{{first_name}}",
@@ -87,19 +98,30 @@ fun TemplateStudioEditorScreen(
         "{{expiry_date}}",
         "{{blood_group}}",
         "{{licence_classes}}",
-        "{{authority}}"
+        "{{authority}}",
+        "{{district}}",
+        "{{facility}}",
+        "{{signature}}",
+        "{{photo}}"
     )
-    val colorPresets = listOf("#18181B", "#1E3A8A", "#14532D", "#7F1D1D", "#854D0E", "#0284C7")
+    val colorPresets = listOf("#18181B", "#1E3A8A", "#14532D", "#7F1D1D", "#854D0E", "#0284C7", "#D97706", "#4B5563")
 
+    var templateId by remember { mutableStateOf<String?>(null) }
     var templateName by remember { mutableStateOf("Tanzania National ID Template") }
     var selectedCategory by remember { mutableStateOf("NIDA") }
     var selectedSide by remember { mutableStateOf("front") }
-    var orientation by remember { mutableStateOf("landscape") }
+    var isUniversal by remember { mutableStateOf(false) }
     var primaryColorHex by remember { mutableStateOf("#18181B") }
     var cardBgHex by remember { mutableStateOf("#FFFFFF") }
     var statusMessage by remember { mutableStateOf<String?>(null) }
-    var badgePhotoUri by remember { mutableStateOf<Uri?>(null) }
     var lastExportedFile by remember { mutableStateOf<File?>(null) }
+
+    // Dialog & Library Sheet States
+    var showLibraryModal by remember { mutableStateOf(false) }
+    var showJsonModal by remember { mutableStateOf(false) }
+    var jsonModalMode by remember { mutableStateOf("EXPORT") } // EXPORT or IMPORT
+    var jsonTextState by remember { mutableStateOf("") }
+    var showDeleteConfirmDialog by remember { mutableStateOf(false) }
 
     val defaultFrontLayers = remember {
         listOf(
@@ -179,8 +201,29 @@ fun TemplateStudioEditorScreen(
                 textValue = "19950612141020000122",
                 xPercent = 34f,
                 yPercent = 74f,
-                widthPercent = 60f,
+                widthPercent = 40f,
                 heightPercent = 14f
+            ),
+            StudioLayer(
+                id = "f_qr",
+                name = "Verification QR Code",
+                type = StudioLayerType.QRCODE,
+                bindingToken = "{{nida_number}}",
+                textValue = "BIGSTA-VERIFIED-19950612",
+                xPercent = 78f,
+                yPercent = 68f,
+                widthPercent = 17f,
+                heightPercent = 22f
+            ),
+            StudioLayer(
+                id = "f_seal",
+                name = "Official Seal",
+                type = StudioLayerType.BADGE,
+                textValue = "COAT OF ARMS",
+                xPercent = 82f,
+                yPercent = 24f,
+                widthPercent = 13f,
+                heightPercent = 18f
             )
         )
     }
@@ -189,113 +232,298 @@ fun TemplateStudioEditorScreen(
         listOf(
             StudioLayer(
                 id = "b_header",
-                name = "Issuing Authority Header",
+                name = "Back Header Terms",
                 type = StudioLayerType.TEXT,
-                textValue = "NATIONAL IDENTIFICATION AUTHORITY - NIDA",
+                textValue = "MALI YA SERIKALI YA JAMHURI YA MUUNGANO WA TANZANIA",
                 xPercent = 5f,
                 yPercent = 8f,
-                fontSize = 22f,
+                fontSize = 18f,
                 isBold = true,
                 colorHex = "#18181B"
             ),
             StudioLayer(
-                id = "b_notice",
-                name = "Cardholder Notice",
+                id = "b_terms",
+                name = "Legal Notice Text",
                 type = StudioLayerType.TEXT,
-                textValue = "Kitambulisho hiki ni mali ya Serikali. Kikionekana kirudishwe kituo chochote cha polisi.",
+                textValue = "Kadi hii inapaswa kurudishwa ofisi ya NIDA iliyo karibu ikipotea au kupatikana.",
                 xPercent = 5f,
-                yPercent = 22f,
-                fontSize = 17f,
+                yPercent = 20f,
+                fontSize = 16f,
                 isBold = false,
                 colorHex = "#52525B"
             ),
             StudioLayer(
-                id = "b_ref",
-                name = "Document Reference",
-                type = StudioLayerType.TEXT,
-                bindingToken = "{{id_number}}",
-                textValue = "REF: TZ-NIDA-CARD-2026",
+                id = "b_sign",
+                name = "Signature of Holder",
+                type = StudioLayerType.SIGNATURE,
+                bindingToken = "{{signature}}",
                 xPercent = 5f,
-                yPercent = 45f,
-                fontSize = 20f,
+                yPercent = 42f,
+                widthPercent = 40f,
+                heightPercent = 22f
+            ),
+            StudioLayer(
+                id = "b_authority",
+                name = "Issuing Authority",
+                type = StudioLayerType.TEXT,
+                textValue = "DIRECTOR GENERAL • NIDA",
+                xPercent = 55f,
+                yPercent = 48f,
+                fontSize = 18f,
                 isBold = true,
                 colorHex = "#18181B"
             ),
             StudioLayer(
-                id = "b_sig",
-                name = "Holder Signature Box",
-                type = StudioLayerType.SIGNATURE,
-                bindingToken = "{{signature}}",
-                textValue = "Authorized Signature",
+                id = "b_mrz",
+                name = "Machine Readable Zone (MRZ)",
+                type = StudioLayerType.TEXT,
+                textValue = "I<TZA199506124<<<<<<<<<<<<<<<<<<<\n8501018F2812312TZA<<<<<<<<<<<<<6",
                 xPercent = 5f,
-                yPercent = 60f,
-                widthPercent = 40f,
-                heightPercent = 24f
-            ),
-            StudioLayer(
-                id = "b_qr",
-                name = "2D Verification QR Code",
-                type = StudioLayerType.QRCODE,
-                bindingToken = "{{id_number}}",
-                textValue = "https://nida.go.tz/verify/1995061214102",
-                xPercent = 68f,
-                yPercent = 48f,
-                widthPercent = 26f,
-                heightPercent = 38f
+                yPercent = 76f,
+                fontSize = 20f,
+                isBold = true,
+                colorHex = "#18181B"
             )
         )
     }
 
     var frontLayers by remember { mutableStateOf(defaultFrontLayers) }
     var backLayers by remember { mutableStateOf(defaultBackLayers) }
-    var selectedLayerId by remember { mutableStateOf<String?>("f_name") }
+    var selectedLayerId by remember { mutableStateOf(defaultFrontLayers.first().id) }
 
-    val activeLayers = if (selectedSide == "front") frontLayers else backLayers
-    val selectedLayer = activeLayers.firstOrNull { it.id == selectedLayerId } ?: activeLayers.firstOrNull()
+    val currentLayers = if (selectedSide == "front") frontLayers else backLayers
+    val selectedLayer = currentLayers.find { it.id == selectedLayerId } ?: currentLayers.firstOrNull()
 
-    val photoPicker = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickVisualMedia()
-    ) { uri: Uri? ->
-        if (uri != null) badgePhotoUri = uri
-    }
-
-    fun updateSelectedLayer(transform: (StudioLayer) -> StudioLayer) {
-        val current = selectedLayer ?: return
-        val updated = transform(current)
+    fun updateCurrentLayers(newList: List<StudioLayer>) {
         if (selectedSide == "front") {
-            frontLayers = frontLayers.map { if (it.id == updated.id) updated else it }
+            frontLayers = newList
         } else {
-            backLayers = backLayers.map { if (it.id == updated.id) updated else it }
+            backLayers = newList
         }
     }
 
-    fun renderCardBitmap(): Bitmap {
+    fun updateSelectedLayer(transformer: (StudioLayer) -> StudioLayer) {
+        val target = selectedLayer ?: return
+        val updated = currentLayers.map { if (it.id == target.id) transformer(it) else it }
+        updateCurrentLayers(updated)
+    }
+
+    fun moveLayerUp(id: String) {
+        val index = currentLayers.indexOfFirst { it.id == id }
+        if (index > 0) {
+            val list = currentLayers.toMutableList()
+            val item = list.removeAt(index)
+            list.add(index - 1, item)
+            updateCurrentLayers(list)
+        }
+    }
+
+    fun moveLayerDown(id: String) {
+        val index = currentLayers.indexOfFirst { it.id == id }
+        if (index in 0 until currentLayers.size - 1) {
+            val list = currentLayers.toMutableList()
+            val item = list.removeAt(index)
+            list.add(index + 1, item)
+            updateCurrentLayers(list)
+        }
+    }
+
+    fun bringLayerToFront(id: String) {
+        val index = currentLayers.indexOfFirst { it.id == id }
+        if (index in 0 until currentLayers.size - 1) {
+            val list = currentLayers.toMutableList()
+            val item = list.removeAt(index)
+            list.add(item)
+            updateCurrentLayers(list)
+        }
+    }
+
+    fun sendLayerToBack(id: String) {
+        val index = currentLayers.indexOfFirst { it.id == id }
+        if (index > 0) {
+            val list = currentLayers.toMutableList()
+            val item = list.removeAt(index)
+            list.add(0, item)
+            updateCurrentLayers(list)
+        }
+    }
+
+    fun duplicateLayer(id: String) {
+        val original = currentLayers.find { it.id == id } ?: return
+        val copy = original.copy(
+            id = "layer_${System.currentTimeMillis()}",
+            name = "${original.name} (Copy)",
+            xPercent = (original.xPercent + 4f).coerceAtMost(80f),
+            yPercent = (original.yPercent + 4f).coerceAtMost(80f)
+        )
+        val list = currentLayers.toMutableList().apply { add(copy) }
+        updateCurrentLayers(list)
+        selectedLayerId = copy.id
+    }
+
+    fun deleteLayer(id: String) {
+        if (currentLayers.size <= 1) return
+        val list = currentLayers.filterNot { it.id == id }
+        updateCurrentLayers(list)
+        selectedLayerId = list.firstOrNull()?.id ?: ""
+    }
+
+    fun serializeLayersJson(): String {
+        return try {
+            val root = JSONObject()
+            root.put("template_name", templateName)
+            root.put("category", selectedCategory)
+            root.put("is_universal", isUniversal)
+
+            val frontArr = JSONArray()
+            frontLayers.forEach { l ->
+                val o = JSONObject()
+                o.put("id", l.id)
+                o.put("name", l.name)
+                o.put("type", l.type.name)
+                o.put("bindingToken", l.bindingToken)
+                o.put("textValue", l.textValue)
+                o.put("xPercent", l.xPercent.toDouble())
+                o.put("yPercent", l.yPercent.toDouble())
+                o.put("widthPercent", l.widthPercent.toDouble())
+                o.put("heightPercent", l.heightPercent.toDouble())
+                o.put("fontSize", l.fontSize.toDouble())
+                o.put("isBold", l.isBold)
+                o.put("colorHex", l.colorHex)
+                o.put("alignment", l.alignment)
+                frontArr.put(o)
+            }
+            root.put("front_layers", frontArr)
+
+            val backArr = JSONArray()
+            backLayers.forEach { l ->
+                val o = JSONObject()
+                o.put("id", l.id)
+                o.put("name", l.name)
+                o.put("type", l.type.name)
+                o.put("bindingToken", l.bindingToken)
+                o.put("textValue", l.textValue)
+                o.put("xPercent", l.xPercent.toDouble())
+                o.put("yPercent", l.yPercent.toDouble())
+                o.put("widthPercent", l.widthPercent.toDouble())
+                o.put("heightPercent", l.heightPercent.toDouble())
+                o.put("fontSize", l.fontSize.toDouble())
+                o.put("isBold", l.isBold)
+                o.put("colorHex", l.colorHex)
+                o.put("alignment", l.alignment)
+                backArr.put(o)
+            }
+            root.put("back_layers", backArr)
+            root.toString(2)
+        } catch (e: Exception) {
+            "[]"
+        }
+    }
+
+    fun importLayersJson(jsonStr: String): Boolean {
+        return try {
+            val root = JSONObject(jsonStr)
+            if (root.has("template_name")) templateName = root.getString("template_name")
+            if (root.has("category")) selectedCategory = root.getString("category")
+            if (root.has("is_universal")) isUniversal = root.optBoolean("is_universal", false)
+
+            if (root.has("front_layers")) {
+                val fArr = root.getJSONArray("front_layers")
+                val fList = mutableListOf<StudioLayer>()
+                for (i in 0 until fArr.length()) {
+                    val o = fArr.getJSONObject(i)
+                    fList.add(
+                        StudioLayer(
+                            id = o.optString("id", "f_$i"),
+                            name = o.optString("name", "Layer $i"),
+                            type = runCatching { StudioLayerType.valueOf(o.getString("type")) }.getOrDefault(StudioLayerType.TEXT),
+                            bindingToken = o.optString("bindingToken", ""),
+                            textValue = o.optString("textValue", ""),
+                            xPercent = o.optDouble("xPercent", 10.0).toFloat(),
+                            yPercent = o.optDouble("yPercent", 20.0).toFloat(),
+                            widthPercent = o.optDouble("widthPercent", 80.0).toFloat(),
+                            heightPercent = o.optDouble("heightPercent", 10.0).toFloat(),
+                            fontSize = o.optDouble("fontSize", 24.0).toFloat(),
+                            isBold = o.optBoolean("isBold", false),
+                            colorHex = o.optString("colorHex", "#18181B"),
+                            alignment = o.optString("alignment", "LEFT")
+                        )
+                    )
+                }
+                if (fList.isNotEmpty()) frontLayers = fList
+            }
+
+            if (root.has("back_layers")) {
+                val bArr = root.getJSONArray("back_layers")
+                val bList = mutableListOf<StudioLayer>()
+                for (i in 0 until bArr.length()) {
+                    val o = bArr.getJSONObject(i)
+                    bList.add(
+                        StudioLayer(
+                            id = o.optString("id", "b_$i"),
+                            name = o.optString("name", "Layer $i"),
+                            type = runCatching { StudioLayerType.valueOf(o.getString("type")) }.getOrDefault(StudioLayerType.TEXT),
+                            bindingToken = o.optString("bindingToken", ""),
+                            textValue = o.optString("textValue", ""),
+                            xPercent = o.optDouble("xPercent", 10.0).toFloat(),
+                            yPercent = o.optDouble("yPercent", 20.0).toFloat(),
+                            widthPercent = o.optDouble("widthPercent", 80.0).toFloat(),
+                            heightPercent = o.optDouble("heightPercent", 10.0).toFloat(),
+                            fontSize = o.optDouble("fontSize", 24.0).toFloat(),
+                            isBold = o.optBoolean("isBold", false),
+                            colorHex = o.optString("colorHex", "#18181B"),
+                            alignment = o.optString("alignment", "LEFT")
+                        )
+                    )
+                }
+                if (bList.isNotEmpty()) backLayers = bList
+            }
+            true
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    fun renderCardBitmap(sideToRender: String = selectedSide): Bitmap {
         val width = 1012
         val height = 638
         val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
 
-        runCatching {
-            canvas.drawColor(Color.parseColor(cardBgHex))
-        }.getOrElse {
-            canvas.drawColor(Color.WHITE)
+        val bgPaint = Paint().apply {
+            color = runCatching { Color.parseColor(cardBgHex) }.getOrDefault(Color.WHITE)
+            style = Paint.Style.FILL
+            isAntiAlias = true
         }
+        val cardRect = RectF(0f, 0f, width.toFloat(), height.toFloat())
+        canvas.drawRoundRect(cardRect, 32f, 32f, bgPaint)
 
+        val headerPaint = Paint().apply {
+            color = runCatching { Color.parseColor(primaryColorHex) }.getOrDefault(Color.rgb(24, 24, 27))
+            style = Paint.Style.FILL
+            isAntiAlias = true
+        }
+        canvas.drawRect(0f, 0f, width.toFloat(), 120f, headerPaint)
+
+        val flagPaint = Paint().apply {
+            style = Paint.Style.FILL
+            isAntiAlias = true
+        }
+        flagPaint.color = Color.rgb(30, 64, 175)
+        canvas.drawRect(0f, 120f, width.toFloat(), 128f, flagPaint)
+
+        val borderPaint = Paint().apply {
+            color = Color.rgb(228, 228, 231)
+            style = Paint.Style.STROKE
+            strokeWidth = 4f
+            isAntiAlias = true
+        }
+        canvas.drawRoundRect(cardRect, 32f, 32f, borderPaint)
+
+        val layers = if (sideToRender == "front") frontLayers else backLayers
         val paint = Paint().apply { isAntiAlias = true }
 
-        // Top authority strip
-        val bannerHeight = 110f
-        runCatching {
-            paint.color = Color.parseColor(primaryColorHex)
-        }.getOrElse {
-            paint.color = Color.rgb(24, 24, 27)
-        }
-        canvas.drawRect(0f, 0f, width.toFloat(), bannerHeight, paint)
-
-        // Draw each layer
-        for (layer in activeLayers) {
-            if (!layer.isVisible) continue
-
+        layers.filter { it.isVisible }.forEach { layer ->
             val x = (layer.xPercent / 100f) * width
             val y = (layer.yPercent / 100f) * height
             val w = (layer.widthPercent / 100f) * width
@@ -304,99 +532,73 @@ fun TemplateStudioEditorScreen(
             when (layer.type) {
                 StudioLayerType.TEXT -> {
                     paint.style = Paint.Style.FILL
-                    runCatching {
-                        paint.color = Color.parseColor(layer.colorHex)
-                    }.getOrElse {
-                        paint.color = Color.BLACK
-                    }
-                    paint.textSize = layer.fontSize * 1.15f
+                    paint.color = runCatching { Color.parseColor(layer.colorHex) }.getOrDefault(Color.BLACK)
+                    paint.textSize = layer.fontSize * 1.35f
                     paint.isFakeBoldText = layer.isBold
                     val display = layer.textValue.ifBlank { layer.bindingToken.ifBlank { layer.name } }
-                    canvas.drawText(display, x, y + paint.textSize * 0.85f, paint)
+                    canvas.drawText(display, x, y + (layer.fontSize * 1.1f), paint)
                 }
 
                 StudioLayerType.PHOTO -> {
-                    val rect = RectF(x, y, x + w, y + h)
-                    paint.color = Color.rgb(228, 228, 231)
+                    val pRect = RectF(x, y, x + w, y + h)
                     paint.style = Paint.Style.FILL
-                    canvas.drawRoundRect(rect, 12f, 12f, paint)
-
-                    if (badgePhotoUri != null) {
-                        runCatching {
-                            context.contentResolver.openInputStream(badgePhotoUri!!)?.use { stream ->
-                                val decoded = android.graphics.BitmapFactory.decodeStream(stream)
-                                if (decoded != null) {
-                                    val scaled = Bitmap.createScaledBitmap(decoded, w.toInt().coerceAtLeast(10), h.toInt().coerceAtLeast(10), true)
-                                    canvas.drawBitmap(scaled, x, y, paint)
-                                }
-                            }
-                        }
-                    } else {
-                        paint.color = Color.rgb(113, 113, 122)
-                        paint.textSize = 20f
-                        paint.isFakeBoldText = false
-                        canvas.drawText("PASSPORT PHOTO", x + 16f, y + h / 2f, paint)
-                    }
+                    paint.color = Color.rgb(244, 244, 245)
+                    canvas.drawRoundRect(pRect, 16f, 16f, paint)
 
                     paint.style = Paint.Style.STROKE
+                    paint.color = Color.rgb(212, 212, 216)
+                    paint.strokeWidth = 3f
+                    canvas.drawRoundRect(pRect, 16f, 16f, paint)
+
+                    paint.style = Paint.Style.FILL
                     paint.color = Color.rgb(161, 161, 170)
-                    paint.strokeWidth = 2.5f
-                    canvas.drawRoundRect(rect, 12f, 12f, paint)
+                    paint.textSize = 20f
+                    paint.isFakeBoldText = true
+                    canvas.drawText("BIOMETRIC PHOTO", x + 16f, y + h / 2f, paint)
                 }
 
                 StudioLayerType.BARCODE -> {
-                    val rect = RectF(x, y, x + w, y + h)
                     paint.style = Paint.Style.FILL
                     paint.color = Color.WHITE
-                    canvas.drawRect(rect, paint)
+                    canvas.drawRect(x, y, x + w, y + h, paint)
 
                     paint.color = Color.BLACK
-                    val barCount = 42
-                    val step = w / barCount
-                    for (i in 0 until barCount) {
-                        val barW = if (i % 3 == 0 || i % 7 == 0) step * 0.8f else step * 0.4f
-                        canvas.drawRect(x + i * step, y + 4f, x + i * step + barW, y + h - 16f, paint)
+                    var currentX = x + 10f
+                    val endX = x + w - 10f
+                    var toggle = true
+                    while (currentX < endX) {
+                        val barWidth = if (toggle) 6f else 3f
+                        canvas.drawRect(currentX, y + 4f, currentX + barWidth, y + h - 18f, paint)
+                        currentX += barWidth + (if (toggle) 4f else 2f)
+                        toggle = !toggle
                     }
                     paint.textSize = 14f
                     paint.isFakeBoldText = true
-                    canvas.drawText(layer.textValue.ifBlank { "1995061214102" }, x + 8f, y + h - 2f, paint)
+                    canvas.drawText(layer.textValue.take(18), x + 12f, y + h - 4f, paint)
                 }
 
                 StudioLayerType.QRCODE -> {
-                    val rect = RectF(x, y, x + w, y + h)
                     paint.style = Paint.Style.FILL
                     paint.color = Color.WHITE
-                    canvas.drawRoundRect(rect, 8f, 8f, paint)
+                    canvas.drawRect(x, y, x + w, y + h, paint)
 
                     paint.color = Color.BLACK
-                    val gridSize = 6
-                    val cellW = w / gridSize
-                    val cellH = h / gridSize
-                    for (r in 0 until gridSize) {
-                        for (c in 0 until gridSize) {
-                            if ((r + c) % 2 == 0 || (r == 0 && c == 0) || (r == gridSize - 1 && c == gridSize - 1)) {
-                                canvas.drawRect(x + c * cellW + 2f, y + r * cellH + 2f, x + (c + 1) * cellW - 2f, y + (r + 1) * cellH - 2f, paint)
-                            }
-                        }
-                    }
                     paint.style = Paint.Style.STROKE
-                    paint.color = Color.rgb(200, 200, 200)
-                    paint.strokeWidth = 2f
-                    canvas.drawRoundRect(rect, 8f, 8f, paint)
+                    paint.strokeWidth = 4f
+                    canvas.drawRect(x + 4f, y + 4f, x + w - 4f, y + h - 4f, paint)
+
+                    paint.style = Paint.Style.FILL
+                    canvas.drawRect(x + 10f, y + 10f, x + 34f, y + 34f, paint)
+                    canvas.drawRect(x + w - 34f, y + 10f, x + w - 10f, y + 34f, paint)
+                    canvas.drawRect(x + 10f, y + h - 34f, x + 34f, y + h - 10f, paint)
                 }
 
                 StudioLayerType.SIGNATURE -> {
-                    val rect = RectF(x, y, x + w, y + h)
-                    paint.style = Paint.Style.FILL
-                    paint.color = Color.rgb(250, 250, 250)
-                    canvas.drawRoundRect(rect, 6f, 6f, paint)
-
                     paint.style = Paint.Style.STROKE
-                    paint.color = Color.rgb(180, 180, 180)
-                    paint.strokeWidth = 1.5f
-                    canvas.drawRoundRect(rect, 6f, 6f, paint)
+                    paint.color = Color.rgb(228, 228, 231)
+                    paint.strokeWidth = 2f
+                    canvas.drawRect(x, y, x + w, y + h, paint)
 
-                    paint.style = Paint.Style.STROKE
                     paint.color = Color.rgb(30, 58, 138)
                     paint.strokeWidth = 2.5f
                     canvas.drawLine(x + 12f, y + h * 0.65f, x + w * 0.4f, y + h * 0.45f, paint)
@@ -420,16 +622,22 @@ fun TemplateStudioEditorScreen(
                     paint.color = Color.rgb(202, 138, 4)
                     canvas.drawText("SEAL", x + w / 3f, y + h / 2f + 5f, paint)
                 }
+
+                StudioLayerType.SHAPE -> {
+                    paint.style = Paint.Style.FILL
+                    paint.color = runCatching { Color.parseColor(layer.colorHex) }.getOrDefault(Color.LTGRAY)
+                    canvas.drawRoundRect(RectF(x, y, x + w, y + h), 8f, 8f, paint)
+                }
             }
         }
 
         return bitmap
     }
 
-    fun saveCurrentCard(): File? {
-        val bmp = renderCardBitmap()
+    fun saveSingleSideCard(): File? {
+        val bmp = renderCardBitmap(selectedSide)
         return runCatching {
-            val file = File(context.cacheDir, "studio_template_${selectedCategory.lowercase().replace(" ", "_")}_${selectedSide}_${System.currentTimeMillis()}.png")
+            val file = File(context.cacheDir, "studio_${selectedCategory.lowercase().replace(" ", "_")}_${selectedSide}_${System.currentTimeMillis()}.png")
             FileOutputStream(file).use { out ->
                 bmp.compress(Bitmap.CompressFormat.PNG, 100, out)
             }
@@ -441,6 +649,37 @@ fun TemplateStudioEditorScreen(
                 sizeBytes = file.length(),
                 pageCount = 1,
                 sourceType = "TEMPLATE_EDITOR"
+            )
+            lastExportedFile = file
+            file
+        }.getOrNull()
+    }
+
+    fun savePrintableMergedSheet(): File? {
+        val frontBmp = renderCardBitmap("front")
+        val backBmp = renderCardBitmap("back")
+        val sheetWidth = 1012
+        val sheetHeight = 638 * 2 + 60
+        val sheetBmp = Bitmap.createBitmap(sheetWidth, sheetHeight, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(sheetBmp)
+        canvas.drawColor(Color.WHITE)
+
+        canvas.drawBitmap(frontBmp, 0f, 0f, null)
+        canvas.drawBitmap(backBmp, 0f, 638f + 60f, null)
+
+        return runCatching {
+            val file = File(context.cacheDir, "sheet_${selectedCategory.lowercase().replace(" ", "_")}_${System.currentTimeMillis()}.png")
+            FileOutputStream(file).use { out ->
+                sheetBmp.compress(Bitmap.CompressFormat.PNG, 100, out)
+            }
+            viewModel.recordLocalExport(
+                id = "sheet_${System.currentTimeMillis()}",
+                fileName = file.name,
+                mimeType = "image/png",
+                localPath = file.absolutePath,
+                sizeBytes = file.length(),
+                pageCount = 2,
+                sourceType = "TEMPLATE_STUDIO_SHEET"
             )
             lastExportedFile = file
             file
@@ -462,9 +701,42 @@ fun TemplateStudioEditorScreen(
                     }
                 },
                 actions = {
+                    // Open template library modal
+                    IconButton(onClick = { showLibraryModal = true }) {
+                        Icon(Icons.Default.FolderOpen, contentDescription = "Template Library")
+                    }
+
+                    // JSON Import / Export modal
+                    IconButton(onClick = {
+                        jsonTextState = serializeLayersJson()
+                        jsonModalMode = "EXPORT"
+                        showJsonModal = true
+                    }) {
+                        Icon(Icons.Default.Code, contentDescription = "JSON Tools")
+                    }
+
+                    // Cloud Database Publish / Sync (Admin & User)
                     IconButton(
                         onClick = {
-                            val file = lastExportedFile ?: saveCurrentCard()
+                            viewModel.saveStudioTemplate(
+                                id = templateId,
+                                name = templateName,
+                                category = selectedCategory,
+                                side = selectedSide,
+                                isUniversal = isUniversal,
+                                layersJson = serializeLayersJson()
+                            ) { success, msg ->
+                                statusMessage = if (success) "Saved & synced to database: $msg" else "Save failed: $msg"
+                            }
+                        }
+                    ) {
+                        Icon(Icons.Default.CloudUpload, contentDescription = "Save to Cloud")
+                    }
+
+                    // Share PNG
+                    IconButton(
+                        onClick = {
+                            val file = lastExportedFile ?: saveSingleSideCard()
                             if (file != null) {
                                 val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
                                 val intent = Intent(Intent.ACTION_SEND).apply {
@@ -478,9 +750,11 @@ fun TemplateStudioEditorScreen(
                     ) {
                         Icon(Icons.Default.Share, contentDescription = "Share template")
                     }
+
+                    // Save single side PNG
                     IconButton(
                         onClick = {
-                            val saved = saveCurrentCard()
+                            val saved = saveSingleSideCard()
                             statusMessage = if (saved != null) {
                                 "Saved ${saved.name} to Downloads & local studio drafts!"
                             } else {
@@ -499,19 +773,32 @@ fun TemplateStudioEditorScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-            contentPadding = PaddingValues(vertical = 14.dp)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            if (!statusMessage.isNullOrBlank()) {
+            statusMessage?.let { msg ->
                 item {
-                    SolidSectionCard {
-                        Text(statusMessage.orEmpty(), color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    Surface(
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.CheckCircle, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(msg, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                            IconButton(onClick = { statusMessage = null }, modifier = Modifier.size(24.dp)) {
+                                Icon(Icons.Default.Close, contentDescription = "Dismiss", modifier = Modifier.size(16.dp))
+                            }
+                        }
                     }
                 }
             }
 
-            // CR80 Preview Surface
+            // CR80 Canvas Live Card Preview
             item {
                 SolidSectionCard {
                     Row(
@@ -519,127 +806,138 @@ fun TemplateStudioEditorScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            "CR80 Canvas Preview (${selectedSide.uppercase()} SIDE)",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 14.sp
-                        )
-                        AssistChip(
-                            onClick = {
-                                selectedSide = if (selectedSide == "front") "back" else "front"
-                                selectedLayerId = if (selectedSide == "front") frontLayers.firstOrNull()?.id else backLayers.firstOrNull()?.id
-                            },
-                            label = { Text("Flip Card") },
-                            leadingIcon = { Icon(Icons.Default.FlipCameraAndroid, contentDescription = null, modifier = Modifier.size(16.dp)) }
-                        )
+                        Text("Live CR80 Card Preview (300 DPI)", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            FilledTonalButton(
+                                onClick = {
+                                    selectedSide = if (selectedSide == "front") "back" else "front"
+                                    selectedLayerId = (if (selectedSide == "front") frontLayers else backLayers).firstOrNull()?.id ?: ""
+                                },
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                            ) {
+                                Icon(Icons.Default.FlipToBack, contentDescription = null, modifier = Modifier.size(14.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(if (selectedSide == "front") "Flip to Back" else "Flip to Front", fontSize = 12.sp)
+                            }
+                        }
                     }
+
                     Spacer(modifier = Modifier.height(10.dp))
-                    val previewBmp = remember(
-                        activeLayers,
-                        primaryColorHex,
-                        cardBgHex,
-                        badgePhotoUri,
-                        selectedSide
-                    ) {
+
+                    val previewBitmap = remember(frontLayers, backLayers, selectedSide, primaryColorHex, cardBgHex) {
                         renderCardBitmap()
                     }
-                    Box(
+
+                    Image(
+                        bitmap = previewBitmap.asImageBitmap(),
+                        contentDescription = "CR80 Canvas Preview",
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(220.dp)
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(Color.White)
-                            .border(1.5.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(14.dp)),
-                        contentAlignment = Alignment.Center
+                            .aspectRatio(1012f / 638f)
+                            .clip(RoundedCornerShape(12.dp))
+                            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(12.dp))
+                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Image(
-                            bitmap = previewBmp.asImageBitmap(),
-                            contentDescription = "Template Canvas Preview",
-                            modifier = Modifier.fillMaxSize()
-                        )
+                        Button(
+                            onClick = {
+                                val file = saveSingleSideCard()
+                                statusMessage = if (file != null) "Exported ${file.name} to Downloads!" else "Export failed."
+                            },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Export Side PNG", fontSize = 12.sp)
+                        }
+
+                        OutlinedButton(
+                            onClick = {
+                                val file = savePrintableMergedSheet()
+                                statusMessage = if (file != null) "Created merged print sheet ${file.name}!" else "Sheet creation failed."
+                            },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(Icons.Default.Layers, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Printable Sheet", fontSize = 12.sp)
+                        }
                     }
                 }
             }
 
-            // Category & Side Selector
+            // Template Metadata & Category Isolation
             item {
                 SolidSectionCard {
-                    Text("Template Category & Side", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    Text("Template Metadata & Target Service", fontWeight = FontWeight.Bold, fontSize = 15.sp)
                     Spacer(modifier = Modifier.height(8.dp))
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        items(categories) { cat ->
-                            FilterChip(
-                                selected = selectedCategory == cat,
-                                onClick = { selectedCategory = cat },
-                                label = { Text(cat) }
-                            )
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(10.dp))
-                    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                        listOf("front", "back").forEachIndexed { index, side ->
-                            SegmentedButton(
-                                selected = selectedSide == side,
-                                onClick = {
-                                    selectedSide = side
-                                    selectedLayerId = if (side == "front") frontLayers.firstOrNull()?.id else backLayers.firstOrNull()?.id
-                                },
-                                shape = SegmentedButtonDefaults.itemShape(index, 2),
-                                modifier = Modifier.testTag("side_switch_$side")
-                            ) {
-                                Text("${side.replaceFirstChar { it.uppercase() }} Side")
-                            }
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(10.dp))
+
                     OutlinedTextField(
                         value = templateName,
                         onValueChange = { templateName = it },
                         label = { Text("Template Name") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
                     )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Text("Target Service Category:", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        items(categories) { cat ->
+                            FilterChip(
+                                selected = selectedCategory.equals(cat, ignoreCase = true),
+                                onClick = { selectedCategory = cat },
+                                label = { Text(cat, fontSize = 11.sp) }
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Universal Template (Fallback for all)", fontSize = 13.sp)
+                        Switch(checked = isUniversal, onCheckedChange = { isUniversal = it })
+                    }
                 }
             }
 
-            // Theme & Banner Color Palette
+            // Card Style & Colors
             item {
                 SolidSectionCard {
-                    Text("Card Branding & Primary Palette", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    Text("Card Styling & Banner Colors", fontWeight = FontWeight.Bold, fontSize = 15.sp)
                     Spacer(modifier = Modifier.height(8.dp))
-                    Text("Select Header Bar Color", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+                    Text("Header Banner Color Preset:", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Spacer(modifier = Modifier.height(6.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        colorPresets.forEach { hex ->
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        items(colorPresets) { hex ->
                             Box(
                                 modifier = Modifier
                                     .size(36.dp)
                                     .clip(CircleShape)
-                                    .background(Color(android.graphics.Color.parseColor(hex)))
+                                    .background(runCatching { androidx.compose.ui.graphics.Color(Color.parseColor(hex)) }.getOrDefault(androidx.compose.ui.graphics.Color.Black))
                                     .border(
-                                        width = if (primaryColorHex == hex) 3.dp else 1.dp,
-                                        color = if (primaryColorHex == hex) MaterialTheme.colorScheme.primary else Color.LightGray,
+                                        width = if (primaryColorHex.equals(hex, ignoreCase = true)) 3.dp else 1.dp,
+                                        color = if (primaryColorHex.equals(hex, ignoreCase = true)) MaterialTheme.colorScheme.primary else androidx.compose.ui.graphics.Color.LightGray,
                                         shape = CircleShape
                                     )
                                     .clickable { primaryColorHex = hex }
                             )
                         }
                     }
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Button(
-                        onClick = {
-                            photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Icon(Icons.Default.PhotoLibrary, contentDescription = null)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(if (badgePhotoUri == null) "Select Sample Badge Photo" else "Change Badge Photo")
-                    }
                 }
             }
 
-            // Layer Stack Management
+            // Layer Stack Management with Reorder & Actions
             item {
                 SolidSectionCard {
                     Row(
@@ -647,175 +945,352 @@ fun TemplateStudioEditorScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("Active Layers (${activeLayers.size})", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        Text("${selectedSide.uppercase()} Layer Stack (${currentLayers.size})", fontWeight = FontWeight.Bold, fontSize = 15.sp)
                         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            IconButton(onClick = {
-                                val newId = "text_${System.currentTimeMillis()}"
-                                val newLayer = StudioLayer(
-                                    id = newId,
-                                    name = "New Text Layer",
-                                    type = StudioLayerType.TEXT,
-                                    textValue = "Sample Text",
-                                    xPercent = 10f,
-                                    yPercent = 50f
-                                )
-                                if (selectedSide == "front") frontLayers = frontLayers + newLayer
-                                else backLayers = backLayers + newLayer
-                                selectedLayerId = newId
-                            }) {
-                                Icon(Icons.Default.Add, contentDescription = "Add text layer")
+                            // Add Layer button
+                            IconButton(
+                                onClick = {
+                                    val newLayer = StudioLayer(
+                                        id = "layer_${System.currentTimeMillis()}",
+                                        name = "New Text Field",
+                                        type = StudioLayerType.TEXT,
+                                        textValue = "SAMPLE TEXT",
+                                        xPercent = 10f,
+                                        yPercent = 50f
+                                    )
+                                    updateCurrentLayers(currentLayers + newLayer)
+                                    selectedLayerId = newLayer.id
+                                }
+                            ) {
+                                Icon(Icons.Default.AddBox, contentDescription = "Add Layer")
                             }
                         }
                     }
-                    Spacer(modifier = Modifier.height(8.dp))
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        items(activeLayers) { layer ->
-                            FilterChip(
-                                selected = selectedLayerId == layer.id,
-                                onClick = { selectedLayerId = layer.id },
-                                label = { Text(layer.name) },
-                                leadingIcon = {
-                                    Icon(
-                                        when (layer.type) {
-                                            StudioLayerType.TEXT -> Icons.Default.TextFields
-                                            StudioLayerType.PHOTO -> Icons.Default.AccountBox
-                                            StudioLayerType.BARCODE -> Icons.Default.QrCode
-                                            StudioLayerType.QRCODE -> Icons.Default.QrCode2
-                                            StudioLayerType.SIGNATURE -> Icons.Default.Draw
-                                            StudioLayerType.BADGE -> Icons.Default.Shield
-                                        },
-                                        contentDescription = null,
-                                        modifier = Modifier.size(16.dp)
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    currentLayers.forEachIndexed { index, layer ->
+                        val isSelected = layer.id == selectedLayerId
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 3.dp)
+                                .clickable { selectedLayerId = layer.id },
+                            color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                            shape = RoundedCornerShape(8.dp),
+                            border = if (isSelected) BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary) else null
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 10.dp, vertical = 8.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        Text(layer.name, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                        Surface(
+                                            color = MaterialTheme.colorScheme.secondaryContainer,
+                                            shape = RoundedCornerShape(4.dp)
+                                        ) {
+                                            Text(layer.type.label, fontSize = 9.sp, modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp))
+                                        }
+                                    }
+                                    Text(
+                                        "X: ${layer.xPercent.toInt()}% • Y: ${layer.yPercent.toInt()}%" +
+                                            if (layer.bindingToken.isNotBlank()) " • ${layer.bindingToken}" else "",
+                                        fontSize = 11.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
-                            )
+
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    IconButton(
+                                        onClick = { moveLayerUp(layer.id) },
+                                        enabled = index > 0,
+                                        modifier = Modifier.size(28.dp)
+                                    ) {
+                                        Icon(Icons.Default.ArrowUpward, contentDescription = "Move Up", modifier = Modifier.size(16.dp))
+                                    }
+                                    IconButton(
+                                        onClick = { moveLayerDown(layer.id) },
+                                        enabled = index < currentLayers.size - 1,
+                                        modifier = Modifier.size(28.dp)
+                                    ) {
+                                        Icon(Icons.Default.ArrowDownward, contentDescription = "Move Down", modifier = Modifier.size(16.dp))
+                                    }
+                                    IconButton(
+                                        onClick = { duplicateLayer(layer.id) },
+                                        modifier = Modifier.size(28.dp)
+                                    ) {
+                                        Icon(Icons.Default.ContentCopy, contentDescription = "Duplicate", modifier = Modifier.size(16.dp))
+                                    }
+                                    IconButton(
+                                        onClick = { deleteLayer(layer.id) },
+                                        modifier = Modifier.size(28.dp)
+                                    ) {
+                                        Icon(Icons.Default.DeleteOutline, contentDescription = "Delete", modifier = Modifier.size(16.dp))
+                                    }
+                                }
+                            }
                         }
                     }
                 }
             }
 
-            // Selected Layer Inspector
-            if (selectedLayer != null) {
+            // Selected Layer Properties Editor
+            selectedLayer?.let { layer ->
                 item {
-                    val layer = selectedLayer
                     SolidSectionCard {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text("Layer: ${layer.name}", fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                            IconButton(
-                                onClick = {
-                                    if (selectedSide == "front") {
-                                        frontLayers = frontLayers.filterNot { it.id == layer.id }
-                                        selectedLayerId = frontLayers.firstOrNull()?.id
-                                    } else {
-                                        backLayers = backLayers.filterNot { it.id == layer.id }
-                                        selectedLayerId = backLayers.firstOrNull()?.id
-                                    }
-                                }
-                            ) {
-                                Icon(Icons.Default.DeleteOutline, contentDescription = "Delete layer", tint = MaterialTheme.colorScheme.error)
-                            }
-                        }
+                        Text("Edit Layer: ${layer.name}", fontWeight = FontWeight.Bold, fontSize = 15.sp)
                         Spacer(modifier = Modifier.height(10.dp))
 
                         OutlinedTextField(
                             value = layer.name,
                             onValueChange = { newName -> updateSelectedLayer { it.copy(name = newName) } },
                             label = { Text("Layer Label") },
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true
                         )
 
-                        if (layer.type == StudioLayerType.TEXT || layer.type == StudioLayerType.BARCODE) {
-                            Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        if (layer.type == StudioLayerType.TEXT || layer.type == StudioLayerType.BARCODE || layer.type == StudioLayerType.QRCODE) {
                             OutlinedTextField(
                                 value = layer.textValue,
                                 onValueChange = { newVal -> updateSelectedLayer { it.copy(textValue = newVal) } },
-                                label = { Text("Static Text or Preview Value") },
-                                singleLine = true,
+                                label = { Text("Display / Default Text") },
                                 modifier = Modifier.fillMaxWidth()
                             )
                             Spacer(modifier = Modifier.height(8.dp))
-                            Text("Dynamic Binding Token:", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Spacer(modifier = Modifier.height(4.dp))
-                            LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                items(bindingTokens) { token ->
-                                    FilterChip(
-                                        selected = layer.bindingToken == token,
-                                        onClick = {
-                                            updateSelectedLayer { it.copy(bindingToken = if (it.bindingToken == token) "" else token) }
-                                        },
-                                        label = { Text(token, fontSize = 11.sp) }
-                                    )
-                                }
+                        }
+
+                        Text("Bind Dynamic Token:", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            items(bindingTokens) { token ->
+                                FilterChip(
+                                    selected = layer.bindingToken == token,
+                                    onClick = {
+                                        val nextToken = if (layer.bindingToken == token) "" else token
+                                        updateSelectedLayer { it.copy(bindingToken = nextToken) }
+                                    },
+                                    label = { Text(token, fontSize = 10.sp) }
+                                )
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(10.dp))
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        // Nudge and Alignment Controls
+                        Text("Positioning & Alignment Tools:", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.height(6.dp))
+
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("Font Size: ${layer.fontSize.toInt()}sp", fontSize = 13.sp)
+                            OutlinedButton(
+                                onClick = {
+                                    val centeredX = ((100f - layer.widthPercent) / 2f).coerceIn(0f, 100f)
+                                    updateSelectedLayer { it.copy(xPercent = centeredX) }
+                                },
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                            ) {
+                                Icon(Icons.Default.FormatAlignCenter, contentDescription = null, modifier = Modifier.size(14.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Center Horiz", fontSize = 11.sp)
+                            }
+
                             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                FilledTonalButton(
-                                    onClick = { updateSelectedLayer { it.copy(fontSize = (it.fontSize - 2f).coerceAtLeast(10f)) } }
+                                IconButton(
+                                    onClick = { updateSelectedLayer { it.copy(xPercent = (it.xPercent - 2f).coerceAtLeast(0f)) } }
                                 ) {
-                                    Text("-")
+                                    Icon(Icons.Default.ArrowBack, contentDescription = "Left")
                                 }
-                                FilledTonalButton(
-                                    onClick = { updateSelectedLayer { it.copy(fontSize = (it.fontSize + 2f).coerceAtMost(52f)) } }
+                                IconButton(
+                                    onClick = { updateSelectedLayer { it.copy(xPercent = (it.xPercent + 2f).coerceAtMost(100f)) } }
                                 ) {
-                                    Text("+")
+                                    Icon(Icons.Default.ArrowForward, contentDescription = "Right")
                                 }
-                                FilterChip(
-                                    selected = layer.isBold,
-                                    onClick = { updateSelectedLayer { it.copy(isBold = !it.isBold) } },
-                                    label = { Text("Bold") }
-                                )
+                                IconButton(
+                                    onClick = { updateSelectedLayer { it.copy(yPercent = (it.yPercent - 2f).coerceAtLeast(0f)) } }
+                                ) {
+                                    Icon(Icons.Default.ArrowUpward, contentDescription = "Up")
+                                }
+                                IconButton(
+                                    onClick = { updateSelectedLayer { it.copy(yPercent = (it.yPercent + 2f).coerceAtMost(100f)) } }
+                                ) {
+                                    Icon(Icons.Default.ArrowDownward, contentDescription = "Down")
+                                }
                             }
                         }
 
                         Spacer(modifier = Modifier.height(10.dp))
-                        Text("Position (X: ${layer.xPercent.toInt()}%, Y: ${layer.yPercent.toInt()}%)", fontSize = 12.sp)
+
+                        Text("X Position: ${layer.xPercent.toInt()}%", fontSize = 12.sp)
                         Slider(
                             value = layer.xPercent,
-                            onValueChange = { newX -> updateSelectedLayer { it.copy(xPercent = newX) } },
-                            valueRange = 0f..90f
+                            onValueChange = { newVal -> updateSelectedLayer { it.copy(xPercent = newVal) } },
+                            valueRange = 0f..100f
                         )
+
+                        Text("Y Position: ${layer.yPercent.toInt()}%", fontSize = 12.sp)
                         Slider(
                             value = layer.yPercent,
-                            onValueChange = { newY -> updateSelectedLayer { it.copy(yPercent = newY) } },
-                            valueRange = 0f..90f
+                            onValueChange = { newVal -> updateSelectedLayer { it.copy(yPercent = newVal) } },
+                            valueRange = 0f..100f
                         )
+
+                        if (layer.type == StudioLayerType.TEXT) {
+                            Text("Font Size: ${layer.fontSize.toInt()}sp", fontSize = 12.sp)
+                            Slider(
+                                value = layer.fontSize,
+                                onValueChange = { newVal -> updateSelectedLayer { it.copy(fontSize = newVal) } },
+                                valueRange = 12f..48f
+                            )
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("Bold Weight", fontSize = 13.sp)
+                                Switch(
+                                    checked = layer.isBold,
+                                    onCheckedChange = { isBold -> updateSelectedLayer { it.copy(isBold = isBold) } }
+                                )
+                            }
+                        }
                     }
                 }
             }
+        }
+    }
 
-            // Export Actions
-            item {
-                Button(
-                    onClick = {
-                        val saved = saveCurrentCard()
-                        statusMessage = if (saved != null) {
-                            "Exported ${saved.name} to Downloads (${saved.length() / 1024} KB)"
-                        } else {
-                            "Export failed."
+    // Template Library Picker Modal
+    if (showLibraryModal) {
+        AlertDialog(
+            onDismissRequest = { showLibraryModal = false },
+            title = { Text("Template Library & Presets") },
+            text = {
+                Column(modifier = Modifier.heightIn(max = 350.dp)) {
+                    Text("Select a cloud template to load into studio:", fontSize = 12.sp)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    if (cachedTemplates.isEmpty()) {
+                        Text("No cached templates found in database.", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    } else {
+                        LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            items(cachedTemplates) { tpl ->
+                                Surface(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            templateId = tpl.id
+                                            templateName = tpl.name
+                                            selectedCategory = tpl.documentCategoryId
+                                            selectedSide = tpl.side.lowercase()
+                                            if (tpl.layersJson.isNotBlank()) {
+                                                importLayersJson(tpl.layersJson)
+                                            }
+                                            showLibraryModal = false
+                                            statusMessage = "Loaded template '${tpl.name}'"
+                                        },
+                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                    shape = RoundedCornerShape(8.dp)
+                                ) {
+                                    Column(modifier = Modifier.padding(10.dp)) {
+                                        Text(tpl.name, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                        Text("${tpl.documentCategoryId} • Side: ${tpl.side.uppercase()}", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                }
+                            }
                         }
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(50.dp)
-                ) {
-                    Icon(Icons.Default.Download, contentDescription = null)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Render & Save Card PNG (${selectedSide.uppercase()})")
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showLibraryModal = false }) {
+                    Text("Close")
                 }
             }
-        }
+        )
+    }
+
+    // JSON Import / Export Modal
+    if (showJsonModal) {
+        AlertDialog(
+            onDismissRequest = { showJsonModal = false },
+            title = { Text(if (jsonModalMode == "EXPORT") "Export Template JSON" else "Import Template JSON") },
+            text = {
+                Column {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        FilterChip(
+                            selected = jsonModalMode == "EXPORT",
+                            onClick = {
+                                jsonModalMode = "EXPORT"
+                                jsonTextState = serializeLayersJson()
+                            },
+                            label = { Text("Export") }
+                        )
+                        FilterChip(
+                            selected = jsonModalMode == "IMPORT",
+                            onClick = {
+                                jsonModalMode = "IMPORT"
+                                jsonTextState = ""
+                            },
+                            label = { Text("Import") }
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    OutlinedTextField(
+                        value = jsonTextState,
+                        onValueChange = { jsonTextState = it },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(200.dp),
+                        readOnly = jsonModalMode == "EXPORT",
+                        label = { Text(if (jsonModalMode == "EXPORT") "Template Definition JSON" else "Paste JSON Definition") }
+                    )
+                }
+            },
+            confirmButton = {
+                if (jsonModalMode == "EXPORT") {
+                    Button(
+                        onClick = {
+                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                            clipboard.setPrimaryClip(ClipData.newPlainText("Template JSON", jsonTextState))
+                            statusMessage = "Copied template JSON to clipboard!"
+                            showJsonModal = false
+                        }
+                    ) {
+                        Text("Copy JSON")
+                    }
+                } else {
+                    Button(
+                        onClick = {
+                            val success = importLayersJson(jsonTextState)
+                            statusMessage = if (success) "Successfully imported template!" else "Failed to parse JSON definition."
+                            showJsonModal = false
+                        }
+                    ) {
+                        Text("Apply JSON")
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showJsonModal = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 }

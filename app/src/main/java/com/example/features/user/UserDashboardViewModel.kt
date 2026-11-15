@@ -193,6 +193,53 @@ class UserDashboardViewModel(
         _uiState.value = _uiState.value.copy(errorMessage = null, submitSuccessMessage = null)
     }
 
+    fun saveStudioTemplate(
+        id: String? = null,
+        name: String,
+        category: String,
+        side: String,
+        backgroundUrl: String? = null,
+        isActive: Boolean = true,
+        isUniversal: Boolean = false,
+        layersJson: String = "[]",
+        onComplete: ((Boolean, String) -> Unit)? = null
+    ) {
+        viewModelScope.launch {
+            when (val res = templateRepository.saveTemplate(
+                id = id,
+                name = name,
+                category = category,
+                side = side,
+                backgroundUrl = backgroundUrl,
+                isActive = isActive,
+                isUniversal = isUniversal,
+                layersJson = layersJson
+            )) {
+                is ApiResult.Success -> {
+                    templateRepository.syncTemplates()
+                    onComplete?.invoke(true, "Template '${res.data.name}' saved successfully!")
+                }
+                is ApiResult.Error -> {
+                    onComplete?.invoke(false, res.message)
+                }
+            }
+        }
+    }
+
+    fun deleteStudioTemplate(templateId: String, onComplete: ((Boolean, String) -> Unit)? = null) {
+        viewModelScope.launch {
+            when (val res = templateRepository.deleteTemplate(templateId)) {
+                is ApiResult.Success -> {
+                    templateRepository.syncTemplates()
+                    onComplete?.invoke(true, "Template deleted.")
+                }
+                is ApiResult.Error -> {
+                    onComplete?.invoke(false, res.message)
+                }
+            }
+        }
+    }
+
     class Factory(
         private val authRepository: AuthRepository,
         private val serviceRequestRepository: ServiceRequestRepository,

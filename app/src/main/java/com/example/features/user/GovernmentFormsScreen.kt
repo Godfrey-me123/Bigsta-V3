@@ -1,14 +1,26 @@
 package com.example.features.user
 
+import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
+import android.graphics.RectF
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas as ComposeCanvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -19,6 +31,11 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -30,13 +47,16 @@ import com.example.ui.components.ErrorMessageBanner
 import com.example.ui.components.SolidSectionCard
 import com.example.ui.components.StatusBadge
 import com.example.ui.theme.BigstaSuccessGreen
+import java.io.File
+import java.io.FileOutputStream
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GovernmentFormsScreen(
     viewModel: UserDashboardViewModel,
     onBack: () -> Unit,
-    initialServiceType: String = "NIDA"
+    initialServiceType: String = "NIDA",
+    onOpenStudio: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -54,57 +74,336 @@ fun GovernmentFormsScreen(
 
     // Common fields
     var firstName by remember { mutableStateOf("") }
+    var middleName by remember { mutableStateOf("") }
     var lastName by remember { mutableStateOf("") }
+    var gender by remember { mutableStateOf("MALE") }
     var phone by remember { mutableStateOf("") }
     var dateOfBirth by remember { mutableStateOf("") }
     var nationalId by remember { mutableStateOf("") }
 
     // Service-specific fields
     var district by remember { mutableStateOf("") }
-    var drivingClass by remember { mutableStateOf("Class B (Light Motor Vehicle)") }
+    var issueDate by remember { mutableStateOf("") }
+    var expiryDate by remember { mutableStateOf("") }
+    var selectedDrivingClasses by remember { mutableStateOf(setOf("B")) }
     var bloodGroup by remember { mutableStateOf("O+") }
+    var issuingAuthority by remember { mutableStateOf("TRA / Police") }
     var nhifFacility by remember { mutableStateOf("") }
+    var nhifStatus by remember { mutableStateOf("Active") }
     var nrcProvince by remember { mutableStateOf("Lusaka") }
+    var nrcRegNumber by remember { mutableStateOf("") }
+    var placeOfBirth by remember { mutableStateOf("") }
+    var villageChief by remember { mutableStateOf("") }
+    var specialMarks by remember { mutableStateOf("None") }
 
+    // Biometrics: Photo & Native Signature Pad
     var photoBytes by remember { mutableStateOf<ByteArray?>(null) }
+    var photoBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var photoLabel by remember { mutableStateOf<String?>(null) }
+    var termsAccepted by remember { mutableStateOf(false) }
     var validationError by remember { mutableStateOf<String?>(null) }
+    var cardPreviewSide by remember { mutableStateOf("front") }
 
-    val drivingClasses = listOf(
-        "Class A (Motorcycle)",
-        "Class B (Light Motor Vehicle)",
-        "Class C (Commercial / Heavy Goods)",
-        "Class D (Passenger Service / PSV)",
-        "Class E (Articulated / Trailer)"
-    )
-
-    val bloodGroups = listOf("A+", "A-", "B+", "B-", "O+", "O-", "AB+", "AB-", "Unknown")
-
-    val zambiaProvinces = listOf(
-        "Central", "Copperbelt", "Eastern", "Luapula", "Lusaka",
-        "Muchinga", "Northern", "North-Western", "Southern", "Western"
-    )
+    // Signature path strokes
+    val signatureLines = remember { mutableStateListOf<List<Offset>>() }
+    var currentLine by remember { mutableStateOf<List<Offset>>(emptyList()) }
 
     val photoPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uri: Uri? ->
         if (uri != null) {
             runCatching {
-                context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-            }.getOrNull()?.let { bytes ->
-                photoBytes = bytes
-                photoLabel = "Attached Passport Photo (${bytes.size / 1024} KB)"
+                context.contentResolver.openInputStream(uri)?.use { stream ->
+                    val bytes = stream.readBytes()
+                    photoBytes = bytes
+                    photoBitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                    photoLabel = "Biometric Photo Selected (${bytes.size / 1024} KB)"
+                }
             }
         }
+    }
+
+    fun loadDemoData() {
+        when (selectedType) {
+            "NIDA" -> {
+                firstName = "Amina"
+                middleName = "Juma"
+                lastName = "Hassan"
+                gender = "FEMALE"
+                dateOfBirth = "1995-06-12"
+                nationalId = "19950612141020000122"
+                district = "Ilala, Dar es Salaam"
+                phone = "+255712345678"
+            }
+            "Driving Licence" -> {
+                firstName = "Godfrey"
+                middleName = "Elias"
+                lastName = "Mrema"
+                gender = "MALE"
+                dateOfBirth = "1991-03-24"
+                nationalId = "DL-TZA-2024-88910"
+                issueDate = "2022-01-15"
+                expiryDate = "2027-01-15"
+                selectedDrivingClasses = setOf("A", "B", "C")
+                bloodGroup = "A+"
+                issuingAuthority = "TRA Mainland"
+                phone = "+255754987654"
+            }
+            "NHIF" -> {
+                firstName = "Neema"
+                middleName = "David"
+                lastName = "Mallya"
+                gender = "FEMALE"
+                dateOfBirth = "1988-11-04"
+                nationalId = "102847593021"
+                nhifStatus = "Active"
+                nhifFacility = "Muhimbili National Hospital (MNH-01)"
+                phone = "+255788112233"
+            }
+            "NRC Zambia" -> {
+                firstName = "Chileshe"
+                middleName = "Mwamba"
+                lastName = "Banda"
+                gender = "MALE"
+                dateOfBirth = "1994-08-19"
+                nationalId = "481920/11/1"
+                nrcRegNumber = "LUS/2021/0491"
+                placeOfBirth = "Lusaka General Hospital"
+                nrcProvince = "Lusaka"
+                district = "Lusaka Central"
+                villageChief = "Chief Mwamba"
+                issueDate = "2021-05-10"
+                specialMarks = "None"
+                phone = "+260971234567"
+            }
+        }
+    }
+
+    val fullName = listOf(firstName, middleName, lastName).filter { it.isNotBlank() }.joinToString(" ")
+
+    fun renderLiveCardBitmap(side: String): Bitmap {
+        val width = 1012
+        val height = 638
+        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+
+        val bgPaint = Paint().apply {
+            color = Color.WHITE
+            style = Paint.Style.FILL
+            isAntiAlias = true
+        }
+        val cardRect = RectF(0f, 0f, width.toFloat(), height.toFloat())
+        canvas.drawRoundRect(cardRect, 32f, 32f, bgPaint)
+
+        // Banner
+        val headerPaint = Paint().apply {
+            color = when (selectedType) {
+                "Driving Licence" -> Color.rgb(20, 83, 45) // Dark Green
+                "NHIF" -> Color.rgb(2, 132, 199) // Sky Blue
+                "NRC Zambia" -> Color.rgb(180, 83, 9) // Amber/Bronze
+                else -> Color.rgb(30, 58, 138) // Deep Blue NIDA
+            }
+            style = Paint.Style.FILL
+            isAntiAlias = true
+        }
+        canvas.drawRect(0f, 0f, width.toFloat(), 120f, headerPaint)
+
+        val accentPaint = Paint().apply {
+            color = Color.rgb(234, 179, 8) // Gold Accent Line
+            style = Paint.Style.FILL
+            isAntiAlias = true
+        }
+        canvas.drawRect(0f, 120f, width.toFloat(), 128f, accentPaint)
+
+        val textPaint = Paint().apply { isAntiAlias = true }
+
+        // Header Title
+        textPaint.color = Color.WHITE
+        textPaint.textSize = 28f
+        textPaint.isFakeBoldText = true
+        val headerTitle = when (selectedType) {
+            "Driving Licence" -> "JAMHURI YA MUUNGANO WA TANZANIA • DRIVING LICENCE"
+            "NHIF" -> "NATIONAL HEALTH INSURANCE FUND • KITAMBULISHO CHA BIMA"
+            "NRC Zambia" -> "REPUBLIC OF ZAMBIA • NATIONAL REGISTRATION CARD"
+            else -> "JAMHURI YA MUUNGANO WA TANZANIA • NIDA"
+        }
+        canvas.drawText(headerTitle, 36f, 68f, textPaint)
+
+        val borderPaint = Paint().apply {
+            color = Color.rgb(228, 228, 231)
+            style = Paint.Style.STROKE
+            strokeWidth = 4f
+            isAntiAlias = true
+        }
+        canvas.drawRoundRect(cardRect, 32f, 32f, borderPaint)
+
+        if (side == "front") {
+            // Photo Box
+            val photoRect = RectF(40f, 150f, 280f, 490f)
+            val pBoxPaint = Paint().apply {
+                color = Color.rgb(244, 244, 245)
+                style = Paint.Style.FILL
+                isAntiAlias = true
+            }
+            canvas.drawRoundRect(photoRect, 16f, 16f, pBoxPaint)
+
+            if (photoBitmap != null) {
+                val scaledPhoto = Bitmap.createScaledBitmap(photoBitmap!!, photoRect.width().toInt(), photoRect.height().toInt(), true)
+                canvas.drawBitmap(scaledPhoto, photoRect.left, photoRect.top, null)
+            } else {
+                textPaint.color = Color.GRAY
+                textPaint.textSize = 18f
+                textPaint.isFakeBoldText = false
+                canvas.drawText("PASSPORT PHOTO", photoRect.left + 24f, photoRect.centerY(), textPaint)
+            }
+
+            // Cardholder Details
+            textPaint.color = Color.rgb(24, 24, 27)
+            textPaint.textSize = 32f
+            textPaint.isFakeBoldText = true
+            canvas.drawText(fullName.ifBlank { "FULL NAME" }, 310f, 210f, textPaint)
+
+            textPaint.color = Color.rgb(113, 113, 122)
+            textPaint.textSize = 20f
+            textPaint.isFakeBoldText = false
+            canvas.drawText("DOCUMENT ID NUMBER", 310f, 255f, textPaint)
+
+            textPaint.color = Color.rgb(30, 58, 138)
+            textPaint.textSize = 30f
+            textPaint.isFakeBoldText = true
+            canvas.drawText(nationalId.ifBlank { "XXXX-XXXX-XXXX" }, 310f, 295f, textPaint)
+
+            textPaint.color = Color.rgb(24, 24, 27)
+            textPaint.textSize = 22f
+            textPaint.isFakeBoldText = false
+            canvas.drawText("DOB: ${dateOfBirth.ifBlank { "YYYY-MM-DD" }}   SEX: $gender", 310f, 350f, textPaint)
+
+            when (selectedType) {
+                "Driving Licence" -> {
+                    canvas.drawText("CLASSES: ${selectedDrivingClasses.sorted().joinToString(", ")}   BLOOD: $bloodGroup", 310f, 400f, textPaint)
+                    canvas.drawText("EXPIRY: ${expiryDate.ifBlank { "2027-01-15" }}   AUTH: $issuingAuthority", 310f, 450f, textPaint)
+                }
+                "NHIF" -> {
+                    canvas.drawText("FACILITY: ${nhifFacility.ifBlank { "Designated Clinic" }}", 310f, 400f, textPaint)
+                    canvas.drawText("STATUS: $nhifStatus", 310f, 450f, textPaint)
+                }
+                "NRC Zambia" -> {
+                    canvas.drawText("PROVINCE: $nrcProvince   DISTRICT: ${district.ifBlank { "Central" }}", 310f, 400f, textPaint)
+                    canvas.drawText("VILLAGE: ${villageChief.ifBlank { "Village" }}", 310f, 450f, textPaint)
+                }
+                else -> {
+                    canvas.drawText("DISTRICT: ${district.ifBlank { "Dar es Salaam" }}", 310f, 400f, textPaint)
+                }
+            }
+
+            // Draw Holder Signature Box
+            val sigRect = RectF(310f, 505f, 620f, 600f)
+            val sigBoxPaint = Paint().apply {
+                color = Color.rgb(244, 244, 245)
+                style = Paint.Style.FILL
+                isAntiAlias = true
+            }
+            canvas.drawRoundRect(sigRect, 8f, 8f, sigBoxPaint)
+
+            val sigStrokePaint = Paint().apply {
+                color = Color.rgb(30, 58, 138)
+                style = Paint.Style.STROKE
+                strokeWidth = 3f
+                isAntiAlias = true
+            }
+
+            if (signatureLines.isNotEmpty()) {
+                val scaleX = sigRect.width() / 300f
+                val scaleY = sigRect.height() / 120f
+                signatureLines.forEach { line ->
+                    for (i in 0 until line.size - 1) {
+                        val p1 = line[i]
+                        val p2 = line[i + 1]
+                        canvas.drawLine(
+                            sigRect.left + (p1.x * scaleX),
+                            sigRect.top + (p1.y * scaleY),
+                            sigRect.left + (p2.x * scaleX),
+                            sigRect.top + (p2.y * scaleY),
+                            sigStrokePaint
+                        )
+                    }
+                }
+            } else {
+                textPaint.color = Color.GRAY
+                textPaint.textSize = 14f
+                textPaint.isFakeBoldText = false
+                canvas.drawText("HOLDER SIGNATURE", sigRect.left + 16f, sigRect.centerY() + 5f, textPaint)
+            }
+        } else {
+            // Back Side
+            textPaint.color = Color.rgb(24, 24, 27)
+            textPaint.textSize = 24f
+            textPaint.isFakeBoldText = true
+            canvas.drawText("TERMS & CONDITIONS OF USE", 40f, 180f, textPaint)
+
+            textPaint.textSize = 18f
+            textPaint.isFakeBoldText = false
+            textPaint.color = Color.rgb(82, 82, 91)
+            canvas.drawText("1. This document remains the property of the issuing Government authority.", 40f, 230f, textPaint)
+            canvas.drawText("2. If lost or found, please return to the nearest administrative or police station.", 40f, 270f, textPaint)
+            canvas.drawText("3. Alteration or unauthorized reproduction is a criminal offense.", 40f, 310f, textPaint)
+
+            textPaint.textSize = 22f
+            textPaint.isFakeBoldText = true
+            textPaint.color = Color.rgb(24, 24, 27)
+            canvas.drawText("CONTACT / EMERGENCY: ${phone.ifBlank { "+255 XXX XXX XXX" }}", 40f, 380f, textPaint)
+
+            // Machine Readable Zone MRZ simulation
+            textPaint.textSize = 24f
+            textPaint.isFakeBoldText = true
+            textPaint.color = Color.rgb(24, 24, 27)
+            val cleanId = nationalId.filter { it.isLetterOrDigit() }.padEnd(12, '<')
+            canvas.drawText("I<TZA$cleanId<<<<<<<<<<<<<<<<<<<", 40f, 520f, textPaint)
+            canvas.drawText("8501018F2812312TZA<<<<<<<<<<<<<6", 40f, 570f, textPaint)
+        }
+
+        return bitmap
+    }
+
+    fun exportCardToDownloads(): File? {
+        val bmp = renderLiveCardBitmap(cardPreviewSide)
+        return runCatching {
+            val file = File(context.cacheDir, "card_${selectedType.lowercase().replace(" ", "_")}_${System.currentTimeMillis()}.png")
+            FileOutputStream(file).use { out ->
+                bmp.compress(Bitmap.CompressFormat.PNG, 100, out)
+            }
+            viewModel.recordLocalExport(
+                id = "doc_${System.currentTimeMillis()}",
+                fileName = file.name,
+                mimeType = "image/png",
+                localPath = file.absolutePath,
+                sizeBytes = file.length(),
+                pageCount = 1,
+                sourceType = "GOVERNMENT_FORM"
+            )
+            file
+        }.getOrNull()
     }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Government Forms") },
+                title = {
+                    Column {
+                        Text("Government ID & Forms", fontWeight = FontWeight.Bold, fontSize = 17.sp)
+                        Text("$selectedType Application", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                actions = {
+                    TextButton(onClick = { loadDemoData() }) {
+                        Icon(Icons.Default.AutoFixHigh, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Demo Fill", fontSize = 12.sp)
                     }
                 }
             )
@@ -114,432 +413,596 @@ fun GovernmentFormsScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-            contentPadding = PaddingValues(vertical = 14.dp)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            item {
-                ScrollableTabRow(
-                    selectedTabIndex = formTypes.indexOf(selectedType),
-                    edgePadding = 0.dp
-                ) {
-                    formTypes.forEach { type ->
-                        Tab(
-                            selected = selectedType == type,
-                            onClick = {
-                                selectedType = type
-                                validationError = null
-                                viewModel.clearFeedback()
-                            },
-                            text = { Text(type, fontSize = 13.sp, fontWeight = FontWeight.SemiBold) }
-                        )
-                    }
-                }
-            }
-
-            // Service guidance card
-            item {
-                Surface(
-                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
-                    shape = RoundedCornerShape(12.dp),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.2f))
-                ) {
-                    Row(
-                        modifier = Modifier.padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Icon(
-                            Icons.Default.Info,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(22.dp)
-                        )
-                        Column {
-                            Text(
-                                when (selectedType) {
-                                    "NIDA" -> "National ID Card (NIDA) Request"
-                                    "Driving Licence" -> "Tanzania Driving Licence Renewal / Issue"
-                                    "NHIF" -> "National Health Insurance Fund Registration"
-                                    else -> "Zambia National Registration Card (NRC)"
-                                },
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 13.sp
-                            )
-                            Text(
-                                when (selectedType) {
-                                    "NIDA" -> "Ensure NIN or reference matches your official NIDA records exactly."
-                                    "Driving Licence" -> "Select authorized vehicle class and blood group for endorsement."
-                                    "NHIF" -> "Enter designated primary facility code and beneficiary membership."
-                                    else -> "Requires NRC format XXXXXX/XX/X and registered district."
-                                },
-                                fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                }
-            }
-
-            if (!state.errorMessage.isNullOrBlank() || validationError != null) {
+            // Feedback messages
+            state.errorMessage?.let { err ->
                 item {
-                    ErrorMessageBanner(
-                        message = validationError ?: state.errorMessage.orEmpty(),
-                        onDismiss = {
-                            validationError = null
-                            viewModel.clearFeedback()
-                        }
-                    )
+                    ErrorMessageBanner(message = err)
                 }
             }
 
-            if (!state.submitSuccessMessage.isNullOrBlank()) {
+            state.submitSuccessMessage?.let { msg ->
                 item {
                     Surface(
-                        color = BigstaSuccessGreen.copy(alpha = 0.12f),
-                        shape = RoundedCornerShape(12.dp),
-                        border = BorderStroke(1.dp, BigstaSuccessGreen.copy(alpha = 0.45f))
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth()
                     ) {
                         Row(
-                            modifier = Modifier.padding(14.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(Icons.Default.CheckCircle, contentDescription = null, tint = BigstaSuccessGreen)
-                            Text(state.submitSuccessMessage.orEmpty(), fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                            Icon(Icons.Default.CheckCircle, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(msg, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                            IconButton(onClick = { viewModel.clearFeedback() }, modifier = Modifier.size(24.dp)) {
+                                Icon(Icons.Default.Close, contentDescription = "Dismiss", modifier = Modifier.size(16.dp))
+                            }
                         }
                     }
                 }
             }
 
+            validationError?.let { err ->
+                item {
+                    ErrorMessageBanner(message = err)
+                }
+            }
+
+            // Service Selector Chips
             item {
                 SolidSectionCard {
-                    Text("$selectedType Application Details", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Text("Select Government Service", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        items(formTypes) { type ->
+                            FilterChip(
+                                selected = selectedType == type,
+                                onClick = {
+                                    selectedType = type
+                                    validationError = null
+                                },
+                                label = { Text(type, fontWeight = if (selectedType == type) FontWeight.Bold else FontWeight.Normal) }
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Applicant Information
+            item {
+                SolidSectionCard {
+                    Text("1. Applicant Identification", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                    Spacer(modifier = Modifier.height(10.dp))
 
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedTextField(
                             value = firstName,
                             onValueChange = { firstName = it; validationError = null },
                             label = { Text("First Name *") },
-                            singleLine = true,
-                            modifier = Modifier
-                                .weight(1f)
-                                .testTag("form_first_name")
+                            modifier = Modifier.weight(1f),
+                            singleLine = true
                         )
                         OutlinedTextField(
-                            value = lastName,
-                            onValueChange = { lastName = it; validationError = null },
-                            label = { Text("Last Name *") },
-                            singleLine = true,
-                            modifier = Modifier
-                                .weight(1f)
-                                .testTag("form_last_name")
+                            value = middleName,
+                            onValueChange = { middleName = it },
+                            label = { Text("Middle Name") },
+                            modifier = Modifier.weight(1f),
+                            singleLine = true
                         )
                     }
 
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedTextField(
-                            value = phone,
-                            onValueChange = { phone = it; validationError = null },
-                            label = { Text("Phone Number *") },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-                            singleLine = true,
-                            modifier = Modifier
-                                .weight(1f)
-                                .testTag("form_phone")
-                        )
-                        OutlinedTextField(
-                            value = dateOfBirth,
-                            onValueChange = { dateOfBirth = it; validationError = null },
-                            label = { Text("Date of Birth (YYYY-MM-DD) *") },
-                            singleLine = true,
-                            modifier = Modifier
-                                .weight(1f)
-                                .testTag("form_dob")
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    // Service-specific primary ID input
                     OutlinedTextField(
-                        value = nationalId,
-                        onValueChange = { nationalId = it; validationError = null },
-                        label = {
-                            Text(
-                                when (selectedType) {
-                                    "NIDA" -> "National ID Number (NIN / 20 digits)"
-                                    "Driving Licence" -> "Existing Licence Number (if renewing)"
-                                    "NHIF" -> "NHIF Membership / Card Number"
-                                    else -> "Zambia NRC Number (e.g. 123456/11/1)"
-                                }
-                            )
-                        },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
+                        value = lastName,
+                        onValueChange = { lastName = it; validationError = null },
+                        label = { Text("Last Name *") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
                     )
 
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    // Secondary service-specific inputs
+                    Text("Gender:", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(
+                            selected = gender == "MALE",
+                            onClick = { gender = "MALE" },
+                            label = { Text("Male") }
+                        )
+                        FilterChip(
+                            selected = gender == "FEMALE",
+                            onClick = { gender = "FEMALE" },
+                            label = { Text("Female") }
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = dateOfBirth,
+                        onValueChange = { dateOfBirth = it; validationError = null },
+                        label = { Text("Date of Birth (YYYY-MM-DD) *") },
+                        placeholder = { Text("e.g. 1995-06-12") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    val idLabel = when (selectedType) {
+                        "Driving Licence" -> "Licence Number / Application Ref *"
+                        "NHIF" -> "NHIF Membership / Card Number (10-12 digits) *"
+                        "NRC Zambia" -> "NRC Number (Format: XXXXXX/XX/X) *"
+                        else -> "NIDA Number / NIN (20 digits or Ref) *"
+                    }
+                    OutlinedTextField(
+                        value = nationalId,
+                        onValueChange = { nationalId = it; validationError = null },
+                        label = { Text(idLabel) },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = phone,
+                        onValueChange = { phone = it; validationError = null },
+                        label = { Text("Applicant Phone Number *") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                }
+            }
+
+            // Service Specific Details
+            item {
+                SolidSectionCard {
+                    Text("2. $selectedType Specifications", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                    Spacer(modifier = Modifier.height(10.dp))
+
                     when (selectedType) {
                         "NIDA" -> {
                             OutlinedTextField(
                                 value = district,
                                 onValueChange = { district = it },
-                                label = { Text("Registration District / Region") },
-                                singleLine = true,
+                                label = { Text("District & Region of Residence") },
+                                placeholder = { Text("e.g. Ilala, Dar es Salaam") },
                                 modifier = Modifier.fillMaxWidth()
                             )
                         }
-                        "Driving Licence" -> {
-                            var drivingMenuExpanded by remember { mutableStateOf(false) }
-                            var bloodMenuExpanded by remember { mutableStateOf(false) }
 
-                            ExposedDropdownMenuBox(
-                                expanded = drivingMenuExpanded,
-                                onExpandedChange = { drivingMenuExpanded = !drivingMenuExpanded }
-                            ) {
-                                OutlinedTextField(
-                                    value = drivingClass,
-                                    onValueChange = {},
-                                    readOnly = true,
-                                    label = { Text("Licence Class") },
-                                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = drivingMenuExpanded) },
-                                    modifier = Modifier
-                                        .menuAnchor()
-                                        .fillMaxWidth()
-                                )
-                                ExposedDropdownMenu(
-                                    expanded = drivingMenuExpanded,
-                                    onDismissRequest = { drivingMenuExpanded = false }
-                                ) {
-                                    drivingClasses.forEach { cls ->
-                                        DropdownMenuItem(
-                                            text = { Text(cls, fontSize = 13.sp) },
-                                            onClick = {
-                                                drivingClass = cls
-                                                drivingMenuExpanded = false
+                        "Driving Licence" -> {
+                            Text("Licence Classes (Select all that apply):", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Spacer(modifier = Modifier.height(4.dp))
+                            val classes = listOf("A", "B", "C", "D", "E")
+                            LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                items(classes) { cls ->
+                                    val isSelected = selectedDrivingClasses.contains(cls)
+                                    FilterChip(
+                                        selected = isSelected,
+                                        onClick = {
+                                            selectedDrivingClasses = if (isSelected) {
+                                                selectedDrivingClasses - cls
+                                            } else {
+                                                selectedDrivingClasses + cls
                                             }
-                                        )
-                                    }
+                                        },
+                                        label = { Text("Class $cls") }
+                                    )
                                 }
                             }
 
                             Spacer(modifier = Modifier.height(8.dp))
 
-                            ExposedDropdownMenuBox(
-                                expanded = bloodMenuExpanded,
-                                onExpandedChange = { bloodMenuExpanded = !bloodMenuExpanded }
-                            ) {
-                                OutlinedTextField(
-                                    value = bloodGroup,
-                                    onValueChange = {},
-                                    readOnly = true,
-                                    label = { Text("Blood Group") },
-                                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = bloodMenuExpanded) },
-                                    modifier = Modifier
-                                        .menuAnchor()
-                                        .fillMaxWidth()
-                                )
-                                ExposedDropdownMenu(
-                                    expanded = bloodMenuExpanded,
-                                    onDismissRequest = { bloodMenuExpanded = false }
-                                ) {
-                                    bloodGroups.forEach { bg ->
-                                        DropdownMenuItem(
-                                            text = { Text(bg, fontSize = 13.sp) },
-                                            onClick = {
-                                                bloodGroup = bg
-                                                bloodMenuExpanded = false
-                                            }
-                                        )
-                                    }
+                            Text("Blood Group:", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Spacer(modifier = Modifier.height(4.dp))
+                            val bloodGroups = listOf("O+", "A+", "B+", "AB+", "O-", "A-", "B-", "AB-")
+                            LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                items(bloodGroups) { bg ->
+                                    FilterChip(
+                                        selected = bloodGroup == bg,
+                                        onClick = { bloodGroup = bg },
+                                        label = { Text(bg) }
+                                    )
                                 }
                             }
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                OutlinedTextField(
+                                    value = issueDate,
+                                    onValueChange = { issueDate = it },
+                                    label = { Text("Issue Date") },
+                                    placeholder = { Text("YYYY-MM-DD") },
+                                    modifier = Modifier.weight(1f)
+                                )
+                                OutlinedTextField(
+                                    value = expiryDate,
+                                    onValueChange = { expiryDate = it },
+                                    label = { Text("Expiry Date") },
+                                    placeholder = { Text("YYYY-MM-DD") },
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
                         }
+
                         "NHIF" -> {
                             OutlinedTextField(
                                 value = nhifFacility,
                                 onValueChange = { nhifFacility = it },
-                                label = { Text("Designated Health Facility / Hospital") },
-                                singleLine = true,
+                                label = { Text("Designated Health Facility / Hospital *") },
+                                placeholder = { Text("e.g. Muhimbili National Hospital") },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            Text("Card Membership Status:", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Spacer(modifier = Modifier.height(4.dp))
+                            val statuses = listOf("Active", "Dependent", "Renewal", "Expired")
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                statuses.forEach { st ->
+                                    FilterChip(
+                                        selected = nhifStatus == st,
+                                        onClick = { nhifStatus = st },
+                                        label = { Text(st) }
+                                    )
+                                }
+                            }
+                        }
+
+                        "NRC Zambia" -> {
+                            OutlinedTextField(
+                                value = placeOfBirth,
+                                onValueChange = { placeOfBirth = it },
+                                label = { Text("Place of Birth") },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            val provinces = listOf("Lusaka", "Copperbelt", "Central", "Eastern", "Luapula", "Northern", "Southern", "Western")
+                            Text("Province of Registration:", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Spacer(modifier = Modifier.height(4.dp))
+                            LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                items(provinces) { prov ->
+                                    FilterChip(
+                                        selected = nrcProvince == prov,
+                                        onClick = { nrcProvince = prov },
+                                        label = { Text(prov) }
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            OutlinedTextField(
+                                value = villageChief,
+                                onValueChange = { villageChief = it },
+                                label = { Text("Village & Chief") },
                                 modifier = Modifier.fillMaxWidth()
                             )
                         }
-                        "NRC Zambia" -> {
-                            var provinceMenuExpanded by remember { mutableStateOf(false) }
+                    }
+                }
+            }
 
-                            ExposedDropdownMenuBox(
-                                expanded = provinceMenuExpanded,
-                                onExpandedChange = { provinceMenuExpanded = !provinceMenuExpanded }
-                            ) {
-                                OutlinedTextField(
-                                    value = nrcProvince,
-                                    onValueChange = {},
-                                    readOnly = true,
-                                    label = { Text("Province") },
-                                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = provinceMenuExpanded) },
-                                    modifier = Modifier
-                                        .menuAnchor()
-                                        .fillMaxWidth()
-                                )
-                                ExposedDropdownMenu(
-                                    expanded = provinceMenuExpanded,
-                                    onDismissRequest = { provinceMenuExpanded = false }
-                                ) {
-                                    zambiaProvinces.forEach { prov ->
-                                        DropdownMenuItem(
-                                            text = { Text(prov, fontSize = 13.sp) },
-                                            onClick = {
-                                                nrcProvince = prov
-                                                provinceMenuExpanded = false
-                                            }
-                                        )
-                                    }
-                                }
-                            }
+            // Biometrics: Photo & Signature Pad
+            item {
+                SolidSectionCard {
+                    Text("3. Biometrics & Digital Signature", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Passport Photo
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Passport Photo (White Background)", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                            Text(photoLabel ?: "No photo selected (optional for draft)", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Button(
+                            onClick = { photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                        ) {
+                            Icon(Icons.Default.PhotoCamera, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Select", fontSize = 12.sp)
                         }
                     }
 
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    OutlinedButton(
-                        onClick = {
-                            photoPicker.launch(
-                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                            )
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(48.dp)
+                    // Native Touch Signature Pad
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(Icons.Default.PhotoLibrary, contentDescription = null)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(photoLabel ?: "Attach Passport Photo (Recommended)")
-                    }
-
-                    Spacer(modifier = Modifier.height(14.dp))
-
-                    Button(
-                        onClick = {
-                            // Validation checks
-                            if (firstName.trim().isBlank() || lastName.trim().isBlank()) {
-                                validationError = "First Name and Last Name are required."
-                                return@Button
+                        Text("Applicant Signature Pad (Sign Below):", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        TextButton(
+                            onClick = {
+                                signatureLines.clear()
+                                currentLine = emptyList()
                             }
-                            if (phone.trim().length < 9) {
-                                validationError = "Please enter a valid telephone number."
-                                return@Button
-                            }
-                            if (dateOfBirth.trim().isBlank()) {
-                                validationError = "Date of Birth is required (YYYY-MM-DD)."
-                                return@Button
-                            }
-
-                            val enrichedReference = when (selectedType) {
-                                "NIDA" -> nationalId.ifBlank { district }
-                                "Driving Licence" -> listOfNotNull(nationalId.takeIf { it.isNotBlank() }, drivingClass, bloodGroup).joinToString(" | ")
-                                "NHIF" -> listOfNotNull(nationalId.takeIf { it.isNotBlank() }, nhifFacility.takeIf { it.isNotBlank() }).joinToString(" | ")
-                                else -> listOfNotNull(nationalId.takeIf { it.isNotBlank() }, nrcProvince).joinToString(" | ")
-                            }.takeIf { it.isNotBlank() }
-
-                            viewModel.submitGovernmentForm(
-                                serviceType = selectedType,
-                                firstName = firstName.trim(),
-                                lastName = lastName.trim(),
-                                phone = phone.trim(),
-                                dateOfBirth = dateOfBirth.trim(),
-                                nationalId = enrichedReference,
-                                photoBytes = photoBytes
-                            )
-                        },
-                        enabled = !state.isLoading,
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(50.dp)
-                            .testTag("form_submit_btn")
-                    ) {
-                        if (state.isLoading) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(20.dp),
-                                strokeWidth = 2.dp,
-                                color = MaterialTheme.colorScheme.onPrimary
-                            )
-                        } else {
-                            Icon(Icons.Default.Send, contentDescription = null)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Submit $selectedType Request")
-                        }
-                    }
-                }
-            }
-
-            item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("Submitted Applications (${state.userRequests.size})", style = MaterialTheme.typography.titleMedium)
-                    if (state.userRequests.isNotEmpty()) {
-                        TextButton(onClick = { viewModel.refreshAll() }) {
-                            Icon(Icons.Default.Refresh, contentDescription = "Refresh", modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("Refresh", fontSize = 12.sp)
-                        }
-                    }
-                }
-            }
-
-            items(state.userRequests, key = { it.id }) { req ->
-                var expanded by remember { mutableStateOf(false) }
-
-                SolidSectionCard {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { expanded = !expanded }
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(req.applicantDisplayName, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                                Text(
-                                    "${req.serviceType} • DOB: ${req.dateOfBirth ?: "-"}",
-                                    fontSize = 12.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                            Icon(Icons.Default.Clear, contentDescription = null, modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Clear", fontSize = 12.sp)
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    val strokeColor = MaterialTheme.colorScheme.primary
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(130.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f))
+                            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(8.dp))
+                            .pointerInput(Unit) {
+                                detectDragGestures(
+                                    onDragStart = { offset ->
+                                        currentLine = listOf(offset)
+                                    },
+                                    onDrag = { change, _ ->
+                                        change.consume()
+                                        currentLine = currentLine + change.position
+                                    },
+                                    onDragEnd = {
+                                        if (currentLine.isNotEmpty()) {
+                                            signatureLines.add(currentLine)
+                                            currentLine = emptyList()
+                                        }
+                                    }
                                 )
                             }
-                            StatusBadge(status = req.status)
+                    ) {
+                        ComposeCanvas(modifier = Modifier.fillMaxSize()) {
+                            signatureLines.forEach { line ->
+                                for (i in 0 until line.size - 1) {
+                                    drawLine(
+                                        color = strokeColor,
+                                        start = line[i],
+                                        end = line[i + 1],
+                                        strokeWidth = 4f
+                                    )
+                                }
+                            }
+                            for (i in 0 until currentLine.size - 1) {
+                                drawLine(
+                                    color = strokeColor,
+                                    start = currentLine[i],
+                                    end = currentLine[i + 1],
+                                    strokeWidth = 4f
+                                )
+                            }
                         }
 
-                        if (expanded) {
-                            Spacer(modifier = Modifier.height(10.dp))
-                            HorizontalDivider()
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text("Tracking ID: ${req.id}", fontSize = 11.sp, color = MaterialTheme.colorScheme.outline)
-                            if (!req.nationalId.isNullOrBlank()) {
-                                Text("Ref / Meta: ${req.nationalId}", fontSize = 12.sp)
+                        if (signatureLines.isEmpty() && currentLine.isEmpty()) {
+                            Text(
+                                "Sign with finger or stylus here",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                fontSize = 12.sp,
+                                modifier = Modifier.align(Alignment.Center)
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Terms Acceptance
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Checkbox(
+                            checked = termsAccepted,
+                            onCheckedChange = { termsAccepted = it }
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            "I confirm that all supplied information and biometrics are accurate and authorized.",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+
+            // Live Instant Card Preview (CR80)
+            item {
+                SolidSectionCard {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Live CR80 Card Preview", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                        FilledTonalButton(
+                            onClick = {
+                                cardPreviewSide = if (cardPreviewSide == "front") "back" else "front"
+                            },
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                        ) {
+                            Icon(Icons.Default.FlipToBack, contentDescription = null, modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(if (cardPreviewSide == "front") "View Back" else "View Front", fontSize = 12.sp)
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    val cardBmp = remember(firstName, middleName, lastName, nationalId, dateOfBirth, gender, selectedType, photoBitmap, signatureLines.size, cardPreviewSide) {
+                        renderLiveCardBitmap(cardPreviewSide)
+                    }
+
+                    Image(
+                        bitmap = cardBmp.asImageBitmap(),
+                        contentDescription = "Live Card Preview",
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(1012f / 638f)
+                            .clip(RoundedCornerShape(12.dp))
+                            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(12.dp))
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = {
+                                val file = exportCardToDownloads()
+                                if (file != null) {
+                                    validationError = null
+                                }
+                            },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Export PNG", fontSize = 12.sp)
+                        }
+
+                        if (onOpenStudio != null) {
+                            OutlinedButton(
+                                onClick = onOpenStudio,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(Icons.Default.Brush, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Edit in Studio", fontSize = 12.sp)
                             }
-                            if (!req.phone.isNullOrBlank()) {
-                                Text("Phone: ${req.phone}", fontSize = 12.sp)
+                        }
+                    }
+                }
+            }
+
+            // Submission Action
+            item {
+                Button(
+                    onClick = {
+                        if (firstName.isBlank() || lastName.isBlank()) {
+                            validationError = "First name and last name are required."
+                            return@Button
+                        }
+                        if (dateOfBirth.isBlank()) {
+                            validationError = "Date of birth is required (YYYY-MM-DD)."
+                            return@Button
+                        }
+                        if (nationalId.isBlank()) {
+                            validationError = "National ID / Number is required."
+                            return@Button
+                        }
+                        if (phone.isBlank()) {
+                            validationError = "Contact phone number is required."
+                            return@Button
+                        }
+                        if (!termsAccepted) {
+                            validationError = "Please accept the terms and conditions checkbox."
+                            return@Button
+                        }
+
+                        validationError = null
+                        val rawData = buildMap {
+                            put("service_type", selectedType)
+                            put("first_name", firstName)
+                            put("middle_name", middleName)
+                            put("last_name", lastName)
+                            put("full_name", fullName)
+                            put("gender", gender)
+                            put("dob", dateOfBirth)
+                            put("national_id", nationalId)
+                            put("phone", phone)
+                            when (selectedType) {
+                                "Driving Licence" -> {
+                                    put("classes", selectedDrivingClasses.joinToString(","))
+                                    put("blood_group", bloodGroup)
+                                    put("authority", issuingAuthority)
+                                }
+                                "NHIF" -> {
+                                    put("facility", nhifFacility)
+                                    put("status", nhifStatus)
+                                }
+                                "NRC Zambia" -> {
+                                    put("province", nrcProvince)
+                                    put("district", district)
+                                    put("village_chief", villageChief)
+                                }
+                                else -> {
+                                    put("district", district)
+                                }
                             }
-                            if (!req.adminNotes.isNullOrBlank()) {
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text(
-                                    "Admin Feedback: ${req.adminNotes}",
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
+                        }
+
+                        viewModel.submitGovernmentForm(
+                            serviceType = selectedType,
+                            formData = rawData,
+                            photoBytes = photoBytes
+                        )
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(50.dp)
+                        .testTag("gov_form_submit_btn"),
+                    enabled = !state.isSubmitting
+                ) {
+                    if (state.isSubmitting) {
+                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Submitting Application...")
+                    } else {
+                        Icon(Icons.Default.Send, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Submit $selectedType Application", fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+
+            // Application History Tracker
+            item {
+                SolidSectionCard {
+                    Text("Your Service Applications (${state.userRequests.size})", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    if (state.userRequests.isEmpty()) {
+                        Text("No applications submitted yet. Completed forms appear here with real-time status updates.", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    } else {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            state.userRequests.take(5).forEach { req ->
+                                Surface(
+                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(10.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(req.fullName, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                            Text("${req.serviceType} • Ref: ${req.id.take(8)}", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        }
+                                        StatusBadge(status = req.status)
+                                    }
+                                }
                             }
                         }
                     }

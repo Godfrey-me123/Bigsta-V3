@@ -1,7 +1,9 @@
 package com.example.features.admin
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -17,6 +19,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.models.NidaRequestDto
 import com.example.data.models.PaymentRequestDto
+import com.example.data.models.TemplateDto
 import com.example.ui.components.EmptyStateCard
 import com.example.ui.components.ErrorMessageBanner
 import com.example.ui.components.SolidSectionCard
@@ -47,6 +50,15 @@ fun AdminConsoleScreen(
     var paymentNoteTarget by remember { mutableStateOf<Pair<PaymentRequestDto, String>?>(null) }
     var nidaNoteTarget by remember { mutableStateOf<Pair<NidaRequestDto, String>?>(null) }
     var noteInput by remember { mutableStateOf("") }
+
+    var templateSearchQuery by remember { mutableStateOf("") }
+    var selectedCategoryFilter by remember { mutableStateOf("ALL") }
+    var reassignTarget by remember { mutableStateOf<TemplateDto?>(null) }
+    var deleteTemplateTarget by remember { mutableStateOf<TemplateDto?>(null) }
+    var showCreateTemplateDialog by remember { mutableStateOf(false) }
+    var newTemplateName by remember { mutableStateOf("") }
+    var newTemplateCategory by remember { mutableStateOf("NIDA") }
+    var newTemplateSide by remember { mutableStateOf("front") }
 
     LaunchedEffect(session.isAdmin) {
         if (session.isAdmin) {
@@ -344,62 +356,161 @@ fun AdminConsoleScreen(
                                         AdminTab.TEMPLATES -> {
                         item {
                             SolidSectionCard {
-                                Text("Template Management & Categories", fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text(
-                                    "Toggle active states, verify category isolation, and review front/back card layouts.",
-                                    fontSize = 12.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text("Template Administration & Studio", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                                        Spacer(modifier = Modifier.height(2.dp))
+                                        Text(
+                                            "Filter by service, reassign categories, activate/deactivate, or delete cloud templates.",
+                                            fontSize = 12.sp,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                    Button(
+                                        onClick = { showCreateTemplateDialog = true },
+                                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+                                    ) {
+                                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text("New", fontSize = 13.sp)
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(12.dp))
+
+                                OutlinedTextField(
+                                    value = templateSearchQuery,
+                                    onValueChange = { templateSearchQuery = it },
+                                    label = { Text("Search templates by name or ID") },
+                                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                                    trailingIcon = {
+                                        if (templateSearchQuery.isNotBlank()) {
+                                            IconButton(onClick = { templateSearchQuery = "" }) {
+                                                Icon(Icons.Default.Clear, contentDescription = "Clear")
+                                            }
+                                        }
+                                    },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    singleLine = true
                                 )
+
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                val categories = listOf("ALL", "NIDA", "Driving Licence", "NHIF", "NRC Zambia", "Custom")
+                                LazyRow(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    items(categories) { cat ->
+                                        FilterChip(
+                                            selected = selectedCategoryFilter.equals(cat, ignoreCase = true),
+                                            onClick = { selectedCategoryFilter = cat },
+                                            label = { Text(cat, fontSize = 12.sp) }
+                                        )
+                                    }
+                                }
                             }
                         }
 
-                        if (state.templates.isEmpty()) {
+                        val filteredTemplates = state.templates.filter { tpl ->
+                            val matchesCat = selectedCategoryFilter == "ALL" ||
+                                tpl.resolvedCategory.equals(selectedCategoryFilter, ignoreCase = true)
+                            val matchesQuery = templateSearchQuery.isBlank() ||
+                                tpl.name.contains(templateSearchQuery, ignoreCase = true) ||
+                                tpl.id.contains(templateSearchQuery, ignoreCase = true) ||
+                                tpl.resolvedCategory.contains(templateSearchQuery, ignoreCase = true)
+                            matchesCat && matchesQuery
+                        }
+
+                        if (filteredTemplates.isEmpty()) {
                             item {
                                 EmptyStateCard(
                                     icon = Icons.Default.AdminPanelSettings,
-                                    title = "No Templates Found",
-                                    subtitle = "Templates grouped by document_category_id, template_card_id, and side appear here."
+                                    title = if (state.templates.isEmpty()) "No Templates in Database" else "No Templates Match Filter",
+                                    subtitle = if (state.templates.isEmpty()) "Tap 'New' above to create and publish a template to Supabase." else "Try searching for another keyword or selecting 'ALL'."
                                 )
                             }
                         } else {
-                            items(state.templates, key = { it.id }) { tpl ->
+                            items(filteredTemplates, key = { it.id }) { tpl ->
                                 SolidSectionCard {
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
                                         horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
+                                        verticalAlignment = Alignment.Top
                                     ) {
                                         Column(modifier = Modifier.weight(1f)) {
-                                            Text(tpl.name.ifBlank { tpl.resolvedCategory }, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                            Text(tpl.name.ifBlank { tpl.resolvedCategory }, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                                            Spacer(modifier = Modifier.height(2.dp))
                                             Text(
-                                                "Category: ${tpl.resolvedCategory} • Card ID: ${tpl.templateCardId ?: "default"}",
+                                                "Category: ${tpl.resolvedCategory} • ID: ${tpl.id.take(12)}",
                                                 fontSize = 12.sp,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                                             )
-                                            Spacer(modifier = Modifier.height(2.dp))
-                                            Surface(
-                                                color = if (tpl.side.equals("front", ignoreCase = true)) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.secondaryContainer,
-                                                shape = RoundedCornerShape(6.dp)
-                                            ) {
-                                                Text(
-                                                    "SIDE: ${tpl.side.uppercase()}",
-                                                    fontSize = 10.sp,
-                                                    fontWeight = FontWeight.Bold,
-                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                                )
+                                            Spacer(modifier = Modifier.height(6.dp))
+                                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                                Surface(
+                                                    color = if (tpl.side.equals("front", ignoreCase = true)) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.secondaryContainer,
+                                                    shape = RoundedCornerShape(6.dp)
+                                                ) {
+                                                    Text(
+                                                        "SIDE: ${tpl.side.uppercase()}",
+                                                        fontSize = 10.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                    )
+                                                }
+                                                Surface(
+                                                    color = if (tpl.isActive) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+                                                    shape = RoundedCornerShape(6.dp)
+                                                ) {
+                                                    Text(
+                                                        if (tpl.isActive) "ACTIVE" else "DISABLED",
+                                                        fontSize = 10.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = if (tpl.isActive) BigstaSuccessGreen else MaterialTheme.colorScheme.outline,
+                                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                    )
+                                                }
                                             }
                                         }
+
                                         Column(horizontalAlignment = Alignment.End) {
                                             Switch(
                                                 checked = tpl.isActive,
                                                 onCheckedChange = { active -> viewModel.toggleTemplateActive(tpl, active) }
                                             )
-                                            Text(
-                                                if (tpl.isActive) "Active" else "Disabled",
-                                                fontSize = 11.sp,
-                                                color = if (tpl.isActive) BigstaSuccessGreen else MaterialTheme.colorScheme.outline
-                                            )
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.height(10.dp))
+                                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                                    Spacer(modifier = Modifier.height(8.dp))
+
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.End,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        OutlinedButton(
+                                            onClick = { reassignTarget = tpl },
+                                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                                        ) {
+                                            Icon(Icons.Default.DriveFileMove, contentDescription = null, modifier = Modifier.size(14.dp))
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text("Reassign", fontSize = 12.sp)
+                                        }
+
+                                        Spacer(modifier = Modifier.width(8.dp))
+
+                                        IconButton(
+                                            onClick = { deleteTemplateTarget = tpl },
+                                            modifier = Modifier.size(36.dp)
+                                        ) {
+                                            Icon(Icons.Default.DeleteOutline, contentDescription = "Delete", tint = BigstaErrorRed)
                                         }
                                     }
                                 }

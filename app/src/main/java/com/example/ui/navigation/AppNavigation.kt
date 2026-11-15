@@ -270,7 +270,8 @@ fun BigstaAppRoot(
                             composable(BigstaRoutes.FORMS) {
                                 GovernmentFormsScreen(
                                     viewModel = dashboardViewModel,
-                                    onBack = { navController.popBackStack() }
+                                    onBack = { navController.popBackStack() },
+                                    onOpenStudio = { navigateSafe(BigstaRoutes.TEMPLATE_EDITOR) }
                                 )
                             }
                             composable(BigstaRoutes.SERVICE_CATALOG) {
@@ -278,7 +279,12 @@ fun BigstaAppRoot(
                             }
                             composable("${BigstaRoutes.FORMS}/{serviceType}") { entry ->
                                 val serviceType = entry.arguments?.getString("serviceType").orEmpty()
-                                GovernmentFormsScreen(viewModel = dashboardViewModel, onBack = { navController.popBackStack() }, initialServiceType = serviceType)
+                                GovernmentFormsScreen(
+                                    viewModel = dashboardViewModel,
+                                    onBack = { navController.popBackStack() },
+                                    initialServiceType = serviceType,
+                                    onOpenStudio = { navigateSafe(BigstaRoutes.TEMPLATE_EDITOR) }
+                                )
                             }
                             composable(BigstaRoutes.TEMPLATES) {
                                 TemplateLibraryScreen(

@@ -112,6 +112,25 @@ class SupabaseRestClient(
         executeRequest(request)
     }
 
+    suspend fun deleteRest(
+        table: String,
+        filterQuery: String,
+        accessToken: String? = null
+    ): ApiResult<String> = withContext(Dispatchers.IO) {
+        val env = configProvider()
+        if (!env.isConfigured) {
+            return@withContext ApiResult.Error("Supabase configuration missing.")
+        }
+        val request = Request.Builder()
+            .url("${env.url}/rest/v1/$table?$filterQuery")
+            .delete()
+            .addHeader("apikey", env.publishableKey)
+            .addHeader("Authorization", "Bearer ${accessToken ?: env.publishableKey}")
+            .build()
+
+        executeRequest(request)
+    }
+
     suspend fun postRpc(
         functionName: String,
         bodyJson: String,
