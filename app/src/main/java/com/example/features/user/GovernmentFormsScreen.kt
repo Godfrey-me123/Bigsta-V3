@@ -119,6 +119,10 @@ fun GovernmentFormsScreen(
     var nhifFacility by remember { mutableStateOf("") }
     var nhifStatus by remember { mutableStateOf("Active") }
     var nrcProvince by remember { mutableStateOf("Lusaka") }
+    var nrcChief by remember { mutableStateOf("") }
+    var nrcVillage by remember { mutableStateOf("") }
+    var nrcParentsPlaceOfBirth by remember { mutableStateOf("") }
+    var nrcRegistrationDate by remember { mutableStateOf("") }
     var nrcRegNumber by remember { mutableStateOf("") }
     var placeOfBirth by remember { mutableStateOf("") }
     var villageChief by remember { mutableStateOf("") }
@@ -202,10 +206,13 @@ fun GovernmentFormsScreen(
                 dateOfBirth = "1994-08-19"
                 nationalId = "481920/11/1"
                 nrcRegNumber = "LUS/2021/0491"
-                placeOfBirth = "Lusaka General Hospital"
+                placeOfBirth = "UTH, Lusaka"
+                nrcParentsPlaceOfBirth = "Kasama, Northern Province"
+                district = "Lusaka"
                 nrcProvince = "Lusaka"
-                district = "Lusaka Central"
-                villageChief = "Chief Mwamba"
+                nrcChief = "Senior Chief Mwamba"
+                nrcVillage = "Kabwata"
+                nrcRegistrationDate = "2010-09-18"
                 issueDate = "2021-05-10"
                 specialMarks = "None"
                 phone = "+260971234567"
@@ -322,8 +329,9 @@ fun GovernmentFormsScreen(
                     canvas.drawText("STATUS: $nhifStatus", 310f, 450f, textPaint)
                 }
                 "NRC Zambia" -> {
-                    canvas.drawText("PROVINCE: $nrcProvince   DISTRICT: ${district.ifBlank { "Central" }}", 310f, 400f, textPaint)
-                    canvas.drawText("VILLAGE: ${villageChief.ifBlank { "Village" }}", 310f, 450f, textPaint)
+                    canvas.drawText("PROVINCE: $nrcProvince   DISTRICT: ${district.ifBlank { "Lusaka" }}", 310f, 400f, textPaint)
+                    canvas.drawText("CHIEF: ${nrcChief.ifBlank { "Mwamba" }}   VILLAGE: ${nrcVillage.ifBlank { "Kabwata" }}", 310f, 440f, textPaint)
+                    canvas.drawText("REG DATE: ${nrcRegistrationDate.ifBlank { "2010-09-18" }}", 310f, 475f, textPaint)
                 }
                 else -> {
                     canvas.drawText("DISTRICT: ${district.ifBlank { "Dar es Salaam" }}", 310f, 400f, textPaint)
@@ -423,6 +431,24 @@ fun GovernmentFormsScreen(
                         rowY += 36f
                     }
                 }
+            } else if (selectedType == "NRC Zambia") {
+                textPaint.color = Color.rgb(180, 83, 9)
+                textPaint.textSize = 22f
+                textPaint.isFakeBoldText = true
+                canvas.drawText("NATIONAL REGISTRATION RECORD (CAP 126)", 40f, 180f, textPaint)
+
+                textPaint.textSize = 17f
+                textPaint.isFakeBoldText = false
+                textPaint.color = Color.rgb(39, 39, 42)
+                canvas.drawText("PLACE OF BIRTH: ${placeOfBirth.ifBlank { "Lusaka, Zambia" }}", 40f, 230f, textPaint)
+                canvas.drawText("PARENTS PLACE OF BIRTH: ${nrcParentsPlaceOfBirth.ifBlank { "Kasama, Northern Province" }}", 40f, 270f, textPaint)
+                canvas.drawText("DISTRICT REGISTRAR OFFICE: ${district.ifBlank { "Lusaka District" }}", 40f, 310f, textPaint)
+                canvas.drawText("RECORD ENTRY REF: ${nrcRegNumber.ifBlank { "LUS/2021/0491" }}", 40f, 350f, textPaint)
+
+                textPaint.textSize = 20f
+                textPaint.isFakeBoldText = true
+                textPaint.color = Color.rgb(24, 24, 27)
+                canvas.drawText("CONTACT / EMERGENCY: ${phone.ifBlank { "+260 97X XXX XXX" }}", 40f, 410f, textPaint)
             } else {
                 textPaint.color = Color.rgb(24, 24, 27)
                 textPaint.textSize = 24f
@@ -868,16 +894,26 @@ fun GovernmentFormsScreen(
                         }
 
                         "NRC Zambia" -> {
-                            OutlinedTextField(
-                                value = placeOfBirth,
-                                onValueChange = { placeOfBirth = it },
-                                label = { Text("Place of Birth") },
-                                modifier = Modifier.fillMaxWidth()
-                            )
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                OutlinedTextField(
+                                    value = placeOfBirth,
+                                    onValueChange = { placeOfBirth = it },
+                                    label = { Text("Place of Birth") },
+                                    placeholder = { Text("e.g. UTH, Lusaka") },
+                                    modifier = Modifier.weight(1f)
+                                )
+                                OutlinedTextField(
+                                    value = nrcParentsPlaceOfBirth,
+                                    onValueChange = { nrcParentsPlaceOfBirth = it },
+                                    label = { Text("Parents' Birthplace") },
+                                    placeholder = { Text("e.g. Kasama") },
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
 
                             Spacer(modifier = Modifier.height(8.dp))
 
-                            val provinces = listOf("Lusaka", "Copperbelt", "Central", "Eastern", "Luapula", "Northern", "Southern", "Western")
+                            val provinces = listOf("Lusaka", "Copperbelt", "Central", "Eastern", "Luapula", "Northern", "Southern", "Western", "North-Western", "Muchinga")
                             Text("Province of Registration:", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             Spacer(modifier = Modifier.height(4.dp))
                             LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -892,12 +928,56 @@ fun GovernmentFormsScreen(
 
                             Spacer(modifier = Modifier.height(8.dp))
 
-                            OutlinedTextField(
-                                value = villageChief,
-                                onValueChange = { villageChief = it },
-                                label = { Text("Village & Chief") },
-                                modifier = Modifier.fillMaxWidth()
-                            )
+                            val zambiaDistricts = listOf("Lusaka", "Ndola", "Kitwe", "Livingstone", "Kabwe", "Chingola", "Mufulira", "Kasama", "Chipata", "Solwezi", "Mongu", "Choma")
+                            Text("District of Registration:", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Spacer(modifier = Modifier.height(4.dp))
+                            LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                items(zambiaDistricts) { dst ->
+                                    FilterChip(
+                                        selected = district == dst,
+                                        onClick = { district = dst },
+                                        label = { Text(dst) }
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                OutlinedTextField(
+                                    value = nrcChief,
+                                    onValueChange = { nrcChief = it },
+                                    label = { Text("Chief Authority") },
+                                    placeholder = { Text("e.g. Senior Chief Mwamba") },
+                                    modifier = Modifier.weight(1f)
+                                )
+                                OutlinedTextField(
+                                    value = nrcVillage,
+                                    onValueChange = { nrcVillage = it },
+                                    label = { Text("Village / Town") },
+                                    placeholder = { Text("e.g. Kabwata") },
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                OutlinedTextField(
+                                    value = nrcRegistrationDate,
+                                    onValueChange = { nrcRegistrationDate = it },
+                                    label = { Text("Date of Registration") },
+                                    placeholder = { Text("YYYY-MM-DD") },
+                                    modifier = Modifier.weight(1f)
+                                )
+                                OutlinedTextField(
+                                    value = nrcRegNumber,
+                                    onValueChange = { nrcRegNumber = it },
+                                    label = { Text("Record Entry Ref") },
+                                    placeholder = { Text("e.g. LUS/2021/0491") },
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
                         }
                     }
                 }
@@ -1160,7 +1240,12 @@ fun GovernmentFormsScreen(
                                 "NRC Zambia" -> {
                                     put("province", nrcProvince)
                                     put("district", district)
-                                    put("village_chief", villageChief)
+                                    put("chief", nrcChief)
+                                    put("village", nrcVillage)
+                                    put("place_of_birth", placeOfBirth)
+                                    put("parents_place_of_birth", nrcParentsPlaceOfBirth)
+                                    put("registration_date", nrcRegistrationDate)
+                                    put("entry_ref", nrcRegNumber)
                                 }
                                 else -> {
                                     put("district", district)
