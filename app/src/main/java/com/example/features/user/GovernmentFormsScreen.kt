@@ -50,6 +50,14 @@ import com.example.ui.theme.BigstaSuccessGreen
 import java.io.File
 import java.io.FileOutputStream
 
+data class NativeVehicleClass(
+    val code: String,
+    val description: String,
+    val enabled: Boolean = false,
+    val issueDate: String = "",
+    val expiryDate: String = ""
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GovernmentFormsScreen(
@@ -85,7 +93,27 @@ fun GovernmentFormsScreen(
     var district by remember { mutableStateOf("") }
     var issueDate by remember { mutableStateOf("") }
     var expiryDate by remember { mutableStateOf("") }
-    var selectedDrivingClasses by remember { mutableStateOf(setOf("B")) }
+    val defaultVehicleClasses = remember {
+        listOf(
+            NativeVehicleClass("A", "Motorcycles & Tricycles"),
+            NativeVehicleClass("A1", "Light Motorcycles"),
+            NativeVehicleClass("A2", "Heavy Motorcycles"),
+            NativeVehicleClass("A3", "Tricycles / Bajaj"),
+            NativeVehicleClass("B", "Private Passenger Vehicles", enabled = true, issueDate = "2022-01-15", expiryDate = "2027-01-15"),
+            NativeVehicleClass("C", "Public Service Vehicles (PSV)"),
+            NativeVehicleClass("C1", "Light Bus"),
+            NativeVehicleClass("C2", "Medium Bus"),
+            NativeVehicleClass("C3", "Heavy Bus"),
+            NativeVehicleClass("D", "Heavy Goods Vehicles (Trucks)"),
+            NativeVehicleClass("E", "Articulated / Combination Vehicles"),
+            NativeVehicleClass("F", "Tractors & Agricultural"),
+            NativeVehicleClass("G", "Special Purpose & Construction")
+        )
+    }
+    var drivingClasses by remember { mutableStateOf(defaultVehicleClasses) }
+    val selectedDrivingClasses by remember(drivingClasses) {
+        derivedStateOf { drivingClasses.filter { it.enabled }.map { it.code }.toSet() }
+    }
     var bloodGroup by remember { mutableStateOf("O+") }
     var issuingAuthority by remember { mutableStateOf("TRA / Police") }
     var nhifFacility by remember { mutableStateOf("") }
@@ -144,7 +172,13 @@ fun GovernmentFormsScreen(
                 nationalId = "DL-TZA-2024-88910"
                 issueDate = "2022-01-15"
                 expiryDate = "2027-01-15"
-                selectedDrivingClasses = setOf("A", "B", "C")
+                drivingClasses = drivingClasses.map {
+                    if (it.code in setOf("A", "B", "C")) {
+                        it.copy(enabled = true, issueDate = "2022-01-15", expiryDate = "2027-01-15")
+                    } else {
+                        it.copy(enabled = false)
+                    }
+                }
                 bloodGroup = "A+"
                 issuingAuthority = "TRA Mainland"
                 phone = "+255754987654"
@@ -336,10 +370,65 @@ fun GovernmentFormsScreen(
             }
         } else {
             // Back Side
-            textPaint.color = Color.rgb(24, 24, 27)
-            textPaint.textSize = 24f
-            textPaint.isFakeBoldText = true
-            canvas.drawText("TERMS & CONDITIONS OF USE", 40f, 180f, textPaint)
+            if (selectedType == "Driving Licence") {
+                textPaint.color = Color.rgb(20, 83, 45)
+                textPaint.textSize = 22f
+                textPaint.isFakeBoldText = true
+                canvas.drawText("AUTHORISED VEHICLE CATEGORIES (CLASSES TABLE)", 40f, 175f, textPaint)
+
+                // Table Header Bar
+                val tableHeaderPaint = Paint().apply {
+                    color = Color.rgb(240, 243, 240)
+                    style = Paint.Style.FILL
+                    isAntiAlias = true
+                }
+                canvas.drawRoundRect(RectF(40f, 195f, 972f, 235f), 6f, 6f, tableHeaderPaint)
+
+                textPaint.color = Color.rgb(20, 83, 45)
+                textPaint.textSize = 14f
+                textPaint.isFakeBoldText = true
+                canvas.drawText("CLASS", 55f, 222f, textPaint)
+                canvas.drawText("VEHICLE CATEGORY DESCRIPTION", 145f, 222f, textPaint)
+                canvas.drawText("VALID FROM", 620f, 222f, textPaint)
+                canvas.drawText("VALID UNTIL", 790f, 222f, textPaint)
+
+                val activeClasses = drivingClasses.filter { it.enabled }.take(6)
+                var rowY = 265f
+                val divPaint = Paint().apply {
+                    color = Color.rgb(228, 228, 231)
+                    strokeWidth = 1.5f
+                    style = Paint.Style.STROKE
+                }
+
+                if (activeClasses.isEmpty()) {
+                    textPaint.color = Color.GRAY
+                    textPaint.isFakeBoldText = false
+                    textPaint.textSize = 15f
+                    canvas.drawText("No specific vehicle classes authorized yet.", 55f, 275f, textPaint)
+                } else {
+                    activeClasses.forEach { cls ->
+                        textPaint.isFakeBoldText = true
+                        textPaint.color = Color.rgb(20, 83, 45)
+                        textPaint.textSize = 15f
+                        canvas.drawText("Class ${cls.code}", 55f, rowY, textPaint)
+
+                        textPaint.isFakeBoldText = false
+                        textPaint.color = Color.rgb(39, 39, 42)
+                        textPaint.textSize = 13.5f
+                        canvas.drawText(cls.description.take(38), 145f, rowY, textPaint)
+                        canvas.drawText(cls.issueDate.ifBlank { issueDate.ifBlank { "2022-01-15" } }, 620f, rowY, textPaint)
+                        canvas.drawText(cls.expiryDate.ifBlank { expiryDate.ifBlank { "2027-01-15" } }, 790f, rowY, textPaint)
+
+                        canvas.drawLine(40f, rowY + 12f, 972f, rowY + 12f, divPaint)
+                        rowY += 36f
+                    }
+                }
+            } else {
+                textPaint.color = Color.rgb(24, 24, 27)
+                textPaint.textSize = 24f
+                textPaint.isFakeBoldText = true
+                canvas.drawText("TERMS & CONDITIONS OF USE", 40f, 180f, textPaint)
+            }
 
             textPaint.textSize = 18f
             textPaint.isFakeBoldText = false
@@ -579,23 +668,142 @@ fun GovernmentFormsScreen(
                         }
 
                         "Driving Licence" -> {
-                            Text("Licence Classes (Select all that apply):", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("Vehicle Classes & Authorizations (${selectedDrivingClasses.size} Active):", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                                TextButton(
+                                    onClick = {
+                                        drivingClasses = drivingClasses.map {
+                                            if (it.enabled) it.copy(issueDate = issueDate, expiryDate = expiryDate) else it
+                                        }
+                                    },
+                                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp)
+                                ) {
+                                    Text("Copy Dates to All", fontSize = 11.sp)
+                                }
+                            }
+
+                            // Quick Class Presets
+                            Text("Quick Presets:", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             Spacer(modifier = Modifier.height(4.dp))
-                            val classes = listOf("A", "B", "C", "D", "E")
                             LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                items(classes) { cls ->
-                                    val isSelected = selectedDrivingClasses.contains(cls)
-                                    FilterChip(
-                                        selected = isSelected,
+                                item {
+                                    AssistChip(
                                         onClick = {
-                                            selectedDrivingClasses = if (isSelected) {
-                                                selectedDrivingClasses - cls
-                                            } else {
-                                                selectedDrivingClasses + cls
+                                            drivingClasses = drivingClasses.map {
+                                                if (it.code in listOf("A", "A1", "A2", "A3")) it.copy(enabled = true, issueDate = issueDate, expiryDate = expiryDate) else it
                                             }
                                         },
-                                        label = { Text("Class $cls") }
+                                        label = { Text("Motorcycles (A)", fontSize = 10.sp) }
                                     )
+                                }
+                                item {
+                                    AssistChip(
+                                        onClick = {
+                                            drivingClasses = drivingClasses.map {
+                                                if (it.code == "B") it.copy(enabled = true, issueDate = issueDate, expiryDate = expiryDate) else it
+                                            }
+                                        },
+                                        label = { Text("Private Car (B)", fontSize = 10.sp) }
+                                    )
+                                }
+                                item {
+                                    AssistChip(
+                                        onClick = {
+                                            drivingClasses = drivingClasses.map {
+                                                if (it.code in listOf("C", "C1", "C2")) it.copy(enabled = true, issueDate = issueDate, expiryDate = expiryDate) else it
+                                            }
+                                        },
+                                        label = { Text("PSV/Bus (C)", fontSize = 10.sp) }
+                                    )
+                                }
+                                item {
+                                    AssistChip(
+                                        onClick = {
+                                            drivingClasses = drivingClasses.map {
+                                                if (it.code in listOf("D", "E")) it.copy(enabled = true, issueDate = issueDate, expiryDate = expiryDate) else it
+                                            }
+                                        },
+                                        label = { Text("Truck/Articulated (D,E)", fontSize = 10.sp) }
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            // Interactive Classes Grid / List
+                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                drivingClasses.forEach { cls ->
+                                    Surface(
+                                        color = if (cls.enabled) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                                        shape = RoundedCornerShape(8.dp),
+                                        border = BorderStroke(1.dp, if (cls.enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Column(modifier = Modifier.padding(10.dp)) {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                                                    Checkbox(
+                                                        checked = cls.enabled,
+                                                        onCheckedChange = { checked ->
+                                                            drivingClasses = drivingClasses.map {
+                                                                if (it.code == cls.code) {
+                                                                    it.copy(
+                                                                        enabled = checked,
+                                                                        issueDate = if (checked && it.issueDate.isBlank()) issueDate else it.issueDate,
+                                                                        expiryDate = if (checked && it.expiryDate.isBlank()) expiryDate else it.expiryDate
+                                                                    )
+                                                                } else it
+                                                            }
+                                                        }
+                                                    )
+                                                    Spacer(modifier = Modifier.width(6.dp))
+                                                    Column {
+                                                        Text("Class ${cls.code}", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                                        Text(cls.description, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                                    }
+                                                }
+                                            }
+
+                                            if (cls.enabled) {
+                                                Spacer(modifier = Modifier.height(8.dp))
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                                ) {
+                                                    OutlinedTextField(
+                                                        value = cls.issueDate,
+                                                        onValueChange = { newDate ->
+                                                            drivingClasses = drivingClasses.map {
+                                                                if (it.code == cls.code) it.copy(issueDate = newDate) else it
+                                                            }
+                                                        },
+                                                        label = { Text("Valid From", fontSize = 11.sp) },
+                                                        singleLine = true,
+                                                        modifier = Modifier.weight(1f)
+                                                    )
+                                                    OutlinedTextField(
+                                                        value = cls.expiryDate,
+                                                        onValueChange = { newDate ->
+                                                            drivingClasses = drivingClasses.map {
+                                                                if (it.code == cls.code) it.copy(expiryDate = newDate) else it
+                                                            }
+                                                        },
+                                                        label = { Text("Valid Until", fontSize = 11.sp) },
+                                                        singleLine = true,
+                                                        modifier = Modifier.weight(1f)
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
                             }
 
@@ -931,7 +1139,17 @@ fun GovernmentFormsScreen(
                             put("phone", phone)
                             when (selectedType) {
                                 "Driving Licence" -> {
-                                    put("classes", selectedDrivingClasses.joinToString(","))
+                                    put("classes", selectedDrivingClasses.sorted().joinToString(","))
+                                    val classesArray = JSONArray()
+                                    drivingClasses.filter { it.enabled }.forEach { cls ->
+                                        val cObj = JSONObject()
+                                        cObj.put("class_code", cls.code)
+                                        cObj.put("description", cls.description)
+                                        cObj.put("issue_date", cls.issueDate.ifBlank { issueDate })
+                                        cObj.put("expiry_date", cls.expiryDate.ifBlank { expiryDate })
+                                        classesArray.put(cObj)
+                                    }
+                                    put("classes_table", classesArray)
                                     put("blood_group", bloodGroup)
                                     put("authority", issuingAuthority)
                                 }
