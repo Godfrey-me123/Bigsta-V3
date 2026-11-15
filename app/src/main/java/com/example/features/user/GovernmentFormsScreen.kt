@@ -68,6 +68,7 @@ fun GovernmentFormsScreen(
 ) {
     val context = LocalContext.current
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val cachedTemplates by viewModel.cachedTemplates.collectAsStateWithLifecycle()
 
     val formTypes = listOf("NIDA", "Driving Licence", "NHIF", "NRC Zambia")
     val normalizedInitialType = remember(initialServiceType) {
@@ -79,6 +80,24 @@ fun GovernmentFormsScreen(
         }
     }
     var selectedType by remember { mutableStateOf(normalizedInitialType) }
+
+    val categoryKey = remember(selectedType) {
+        when (selectedType) {
+            "Driving Licence" -> "licence"
+            "NHIF" -> "nhif"
+            "NRC Zambia" -> "nrc"
+            else -> "nida"
+        }
+    }
+    val matchingTemplates = remember(cachedTemplates, categoryKey, selectedType) {
+        cachedTemplates.filter {
+            it.documentCategoryId.equals(categoryKey, ignoreCase = true) ||
+            it.documentCategoryId.equals("universal", ignoreCase = true) ||
+            it.name.contains(selectedType, ignoreCase = true)
+        }
+    }
+    var selectedTemplate by remember { mutableStateOf<com.example.core.database.CachedTemplateEntity?>(null) }
+    var showTemplatePicker by remember { mutableStateOf(false) }
 
     // Common fields
     var firstName by remember { mutableStateOf("") }
@@ -227,6 +246,79 @@ fun GovernmentFormsScreen(
         val height = 638
         val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
+
+        // Check if a custom template with dynamic layers is active
+        selectedTemplate?.let { tpl ->
+            if (tpl.layersJson.isNotBlank()) {
+                try {
+                    val root = org.json.JSONObject(tpl.layersJson)
+                    val layersArr = if (side == "front") root.optJSONArray("front_layers") else root.optJSONArray("back_layers")
+                    if (layersArr != null && layersArr.length() > 0) {
+                        canvas.drawRoundRect(RectF(0f, 0f, width.toFloat(), height.toFloat()), 32f, 32f, Paint().apply { color = Color.WHITE; style = Paint.Style.FILL; isAntiAlias = true })
+                        for (idx in 0 until layersArr.length()) {
+                            val lObj = layersArr.getJSONObject(idx)
+                            val lType = lObj.optString("type", "TEXT")
+                            val lToken = lObj.optString("bindingToken", "")
+                            var lText = lObj.optString("textValue", "")
+                            val lx = (lObj.optDouble("xPercent", 10.0).toFloat() / 100f) * width
+                            val ly = (lObj.optDouble("yPercent", 20.0).toFloat() / 100f) * height
+                            val lw = (lObj.optDouble("widthPercent", 80.0).toFloat() / 100f) * width
+                            val lh = (lObj.optDouble("heightPercent", 10.0).toFloat() / 100f) * height
+                            val lfSize = lObj.optDouble("fontSize", 20.0).toFloat() * 1.35f
+                            val lIsBold = lObj.optBoolean("isBold", false)
+                            val lColorHex = lObj.optString("colorHex", "#18181B")
+
+                            val tokenVal = when (lToken.trim().lowercase()) {
+                                "{{full_name}}" -> fullName
+                                "{{first_name}}" -> firstName
+                                "{{last_name}}" -> lastName
+                                "{{nida_number}}", "{{id_number}}" -> nationalId
+                                "{{dob}}" -> dateOfBirth
+                                "{{gender}}" -> gender
+                                "{{expiry_date}}" -> expiryDate
+                                "{{blood_group}}" -> bloodGroup
+                                "{{licence_classes}}" -> selectedDrivingClasses.sorted().joinToString(", ")
+                                "{{authority}}" -> issuingAuthority
+                                "{{district}}" -> district
+                                "{{facility}}" -> nhifFacility
+                                else -> ""
+                            }
+                            if (tokenVal.isNotBlank()) lText = tokenVal
+
+                            if (lType == "PHOTO" && photoBitmap != null) {
+                                val pRect = RectF(lx, ly, lx + lw, ly + lh)
+                                val pSrc = android.graphics.Rect(0, 0, photoBitmap.width, photoBitmap.height)
+                                canvas.drawBitmap(photoBitmap, pSrc, pRect, null)
+                            } else if (lType == "SIGNATURE" && signatureLines.isNotEmpty()) {
+                                val sRect = RectF(lx, ly, lx + lw, ly + lh)
+                                canvas.drawRoundRect(sRect, 6f, 6f, Paint().apply { color = Color.rgb(244, 244, 245); style = Paint.Style.FILL })
+                                val strokePaint = Paint().apply { color = Color.rgb(30, 58, 138); strokeWidth = 2.5f; style = Paint.Style.STROKE }
+                                val scaleX = lw / 280f
+                                val scaleY = lh / 120f
+                                for (line in signatureLines) {
+                                    for (i in 0 until line.size - 1) {
+                                        val p1 = line[i]
+                                        val p2 = line[i + 1]
+                                        canvas.drawLine(sRect.left + (p1.x * scaleX), sRect.top + (p1.y * scaleY), sRect.left + (p2.x * scaleX), sRect.top + (p2.y * scaleY), strokePaint)
+                                    }
+                                }
+                            } else if (lType == "TEXT" && lText.isNotBlank()) {
+                                val lp = Paint().apply {
+                                    color = runCatching { Color.parseColor(lColorHex) }.getOrDefault(Color.BLACK)
+                                    textSize = lfSize
+                                    isFakeBoldText = lIsBold
+                                    isAntiAlias = true
+                                }
+                                canvas.drawText(lText, lx, ly + lfSize, lp)
+                            }
+                        }
+                        return bitmap
+                    }
+                } catch (e: Exception) {
+                    // Fallback to standard vector render
+                }
+            }
+        }
 
         val bgPaint = Paint().apply {
             color = Color.WHITE
@@ -560,7 +652,107 @@ fun GovernmentFormsScreen(
                 }
             }
 
-            validationError?.let { err ->
+            // Template Selection Dialog
+        if (showTemplatePicker) {
+            AlertDialog(
+                onDismissRequest = { showTemplatePicker = false },
+                title = { Text("Select $selectedType Template", fontWeight = FontWeight.Bold) },
+                text = {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Text(
+                            "Choose an agency or custom design template to render with this citizen's live information:",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        // Standard System Default Option
+                        Surface(
+                            color = if (selectedTemplate == null) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+                            shape = RoundedCornerShape(8.dp),
+                            border = BorderStroke(1.dp, if (selectedTemplate == null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    selectedTemplate = null
+                                    showTemplatePicker = false
+                                }
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(12.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column {
+                                    Text("System Default $selectedType Layout", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                    Text("Official government standard vector card", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                if (selectedTemplate == null) {
+                                    Icon(Icons.Default.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        if (matchingTemplates.isEmpty()) {
+                            Text(
+                                "No custom templates found for $selectedType. You can design one in the Template Studio Editor.",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(vertical = 8.dp)
+                            )
+                        } else {
+                            matchingTemplates.forEach { tpl ->
+                                Surface(
+                                    color = if (selectedTemplate?.id == tpl.id) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+                                    shape = RoundedCornerShape(8.dp),
+                                    border = BorderStroke(1.dp, if (selectedTemplate?.id == tpl.id) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 4.dp)
+                                        .clickable {
+                                            selectedTemplate = tpl
+                                            showTemplatePicker = false
+                                        }
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(12.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(tpl.name, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                            Text("Category: ${tpl.documentCategoryId} • Side: ${tpl.side.uppercase()}", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        }
+                                        if (selectedTemplate?.id == tpl.id) {
+                                            Icon(Icons.Default.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { showTemplatePicker = false }) {
+                        Text("Done")
+                    }
+                },
+                dismissButton = {
+                    if (onOpenStudio != null) {
+                        TextButton(onClick = {
+                            showTemplatePicker = false
+                            onOpenStudio()
+                        }) {
+                            Text("Open Studio Editor")
+                        }
+                    }
+                }
+            )
+        }
+
+        validationError?.let { err ->
                 item {
                     ErrorMessageBanner(message = err)
                 }
@@ -1110,6 +1302,44 @@ fun GovernmentFormsScreen(
                 }
             }
 
+            // Active Template Picker & Studio Linkage Bar
+            item {
+                SolidSectionCard {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Active Design Template:", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(
+                                selectedTemplate?.name ?: "System Standard $selectedType Layout",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.sp
+                            )
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            FilledTonalButton(
+                                onClick = { showTemplatePicker = true },
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                            ) {
+                                Icon(Icons.Default.DashboardCustomize, contentDescription = null, modifier = Modifier.size(14.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(if (selectedTemplate != null) "Switch" else "Pick Template", fontSize = 11.sp)
+                            }
+                            if (selectedTemplate != null) {
+                                IconButton(
+                                    onClick = { selectedTemplate = null },
+                                    modifier = Modifier.size(28.dp)
+                                ) {
+                                    Icon(Icons.Default.Close, contentDescription = "Reset Template", modifier = Modifier.size(16.dp))
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             // Live Instant Card Preview (CR80)
             item {
                 SolidSectionCard {
@@ -1133,7 +1363,7 @@ fun GovernmentFormsScreen(
 
                     Spacer(modifier = Modifier.height(10.dp))
 
-                    val cardBmp = remember(firstName, middleName, lastName, nationalId, dateOfBirth, gender, selectedType, photoBitmap, signatureLines.size, cardPreviewSide) {
+                    val cardBmp = remember(firstName, middleName, lastName, nationalId, dateOfBirth, gender, selectedType, photoBitmap, signatureLines.size, cardPreviewSide, selectedTemplate) {
                         renderLiveCardBitmap(cardPreviewSide)
                     }
 
