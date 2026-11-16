@@ -46,8 +46,8 @@ fun ServiceMenuDrawer(
             DrawerEntry(BigstaRoutes.PASSPORT_STUDIO, "Passport Size Photo Studio", Icons.Default.CameraAlt, "drawer_passport_studio")
         )),
         DrawerGroup("Templates", Icons.Default.Layers, listOf(
-            DrawerEntry(BigstaRoutes.TEMPLATES, "Saved Templates Library", Icons.Default.Collections, "drawer_templates"),
-            DrawerEntry(BigstaRoutes.TEMPLATE_EDITOR, "Custom Card Studio", Icons.Default.EditNote, "drawer_template_editor")
+            DrawerEntry(BigstaRoutes.TEMPLATES, "Saved Templates Library", Icons.Default.Collections, "drawer_templates", adminOnly = true),
+            DrawerEntry(BigstaRoutes.TEMPLATE_EDITOR, "Custom Card Studio", Icons.Default.EditNote, "drawer_template_editor", adminOnly = true)
         )),
         DrawerGroup("Print & Documents", Icons.Default.PictureAsPdf, listOf(
             DrawerEntry(BigstaRoutes.PDF_TOOLS, "PDF Reader & Print", Icons.Default.PictureAsPdf, "drawer_pdf_tools"),
@@ -82,6 +82,8 @@ fun ServiceMenuDrawer(
             }
             Divider(modifier = Modifier.padding(vertical = 4.dp))
             groups.forEach { group ->
+                val visibleEntries = group.entries.filter { !it.adminOnly || session.isAdmin }
+                if (visibleEntries.isEmpty()) return@forEach
                 val isExpanded = expandedGroup == group.title
                 Surface(shape = RoundedCornerShape(12.dp), color = if (isExpanded) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .45f) else MaterialTheme.colorScheme.surface) {
                     Column {
@@ -94,8 +96,7 @@ fun ServiceMenuDrawer(
                             modifier = Modifier.testTag("drawer_group_${group.title.lowercase().replace(' ', '_')}")
                         )
                         if (isExpanded) {
-                            group.entries.forEach { entry ->
-                                if (entry.adminOnly && !session.isAdmin) return@forEach
+                            visibleEntries.forEach { entry ->
                                 NavigationDrawerItem(
                                     label = { Text(entry.title, fontSize = 13.sp, fontWeight = if (currentRoute == entry.route) FontWeight.Bold else FontWeight.Normal) },
                                     selected = currentRoute == entry.route,

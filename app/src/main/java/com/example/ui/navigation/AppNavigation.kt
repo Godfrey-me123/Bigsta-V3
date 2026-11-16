@@ -159,7 +159,8 @@ fun BigstaAppRoot(
     }
 
     fun navigateSafe(route: String) {
-        if (route == BigstaRoutes.ADMIN && !session.isAdmin) {
+        val adminOnlyRoutes = setOf(BigstaRoutes.ADMIN, BigstaRoutes.TEMPLATE_EDITOR, BigstaRoutes.TEMPLATES)
+        if (route in adminOnlyRoutes && !session.isAdmin) {
             return
         }
         if (topNavItems.any { it.route == route }) {
@@ -262,10 +263,16 @@ fun BigstaAppRoot(
                                 )
                             }
                             composable(BigstaRoutes.TEMPLATE_EDITOR) {
-                                TemplateStudioEditorScreen(
-                                    viewModel = dashboardViewModel,
-                                    onBack = { navController.popBackStack() }
-                                )
+                                if (!session.isAdmin) {
+                                    LaunchedEffect(Unit) {
+                                        navController.popBackStack()
+                                    }
+                                } else {
+                                    TemplateStudioEditorScreen(
+                                        viewModel = dashboardViewModel,
+                                        onBack = { navController.popBackStack() }
+                                    )
+                                }
                             }
                             composable(BigstaRoutes.FORMS) {
                                 GovernmentFormsScreen(
@@ -287,11 +294,17 @@ fun BigstaAppRoot(
                                 )
                             }
                             composable(BigstaRoutes.TEMPLATES) {
-                                TemplateLibraryScreen(
-                                    viewModel = dashboardViewModel,
-                                    onBack = { navController.popBackStack() },
-                                    onOpenStudio = { navigateSafe(BigstaRoutes.TEMPLATE_EDITOR) }
-                                )
+                                if (!session.isAdmin) {
+                                    LaunchedEffect(Unit) {
+                                        navController.popBackStack()
+                                    }
+                                } else {
+                                    TemplateLibraryScreen(
+                                        viewModel = dashboardViewModel,
+                                        onBack = { navController.popBackStack() },
+                                        onOpenStudio = { navigateSafe(BigstaRoutes.TEMPLATE_EDITOR) }
+                                    )
+                                }
                             }
                             composable(BigstaRoutes.DOWNLOADS) {
                                 DownloadsScreen(viewModel = dashboardViewModel, onBack = { navController.popBackStack() })
@@ -340,10 +353,16 @@ fun BigstaAppRoot(
                                 )
                             }
                             composable(BigstaRoutes.ADMIN) {
-                                AdminConsoleScreen(
-                                    viewModel = adminViewModel,
-                                    onBack = { navController.popBackStack() }
-                                )
+                                if (!session.isAdmin) {
+                                    LaunchedEffect(Unit) {
+                                        navController.popBackStack()
+                                    }
+                                } else {
+                                    AdminConsoleScreen(
+                                        viewModel = adminViewModel,
+                                        onBack = { navController.popBackStack() }
+                                    )
+                                }
                             }
                             composable(BigstaRoutes.SETTINGS) {
                                 SettingsScreen(

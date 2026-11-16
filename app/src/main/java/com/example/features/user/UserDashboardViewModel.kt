@@ -115,6 +115,27 @@ class UserDashboardViewModel(
 
     fun submitGovernmentForm(
         serviceType: String,
+        formData: Map<String, Any?>,
+        photoBytes: ByteArray? = null
+    ) {
+        val firstName = formData["first_name"]?.toString() ?: ""
+        val lastName = formData["last_name"]?.toString() ?: ""
+        val phone = formData["phone"]?.toString() ?: ""
+        val dob = formData["dob"]?.toString() ?: ""
+        val nationalId = formData["national_id"]?.toString()
+        submitGovernmentForm(
+            serviceType = serviceType,
+            firstName = firstName,
+            lastName = lastName,
+            phone = phone,
+            dateOfBirth = dob,
+            nationalId = nationalId,
+            photoBytes = photoBytes
+        )
+    }
+
+    fun submitGovernmentForm(
+        serviceType: String,
         firstName: String,
         lastName: String,
         phone: String,

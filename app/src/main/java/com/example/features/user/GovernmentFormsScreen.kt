@@ -48,6 +48,15 @@ import com.example.ui.components.SolidSectionCard
 import com.example.ui.components.StatusBadge
 import com.example.ui.theme.BigstaSuccessGreen
 import java.io.File
+import android.os.Bundle
+import android.os.CancellationSignal
+import android.os.ParcelFileDescriptor
+import android.print.PageRange
+import android.print.PrintAttributes
+import android.print.PrintDocumentAdapter
+import android.print.PrintDocumentInfo
+import android.print.PrintManager
+import android.graphics.pdf.PdfDocument
 import java.io.FileOutputStream
 
 data class NativeVehicleClass(
@@ -69,6 +78,7 @@ fun GovernmentFormsScreen(
     val context = LocalContext.current
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val cachedTemplates by viewModel.cachedTemplates.collectAsStateWithLifecycle()
+    val session by viewModel.session.collectAsStateWithLifecycle()
 
     val formTypes = listOf("NIDA", "Driving Licence", "NHIF", "NRC Zambia")
     val normalizedInitialType = remember(initialServiceType) {
@@ -670,6 +680,71 @@ fun GovernmentFormsScreen(
             )
             file
         }.getOrNull()
+    }
+
+    fun printCardDirectly() {
+        val bmp = renderLiveCardBitmap(cardPreviewSide)
+        val printManager = context.getSystemService(Context.PRINT_SERVICE) as? PrintManager ?: return
+        val docName = "${selectedType.replace(' ', '_')}_Card_${cardPreviewSide.uppercase()}"
+        val adapter = object : PrintDocumentAdapter() {
+            override fun onLayout(
+                oldAttributes: PrintAttributes?,
+                newAttributes: PrintAttributes,
+                cancellationSignal: CancellationSignal?,
+                callback: LayoutResultCallback,
+                extras: Bundle?
+            ) {
+                if (cancellationSignal?.isCanceled == true) {
+                    callback.onLayoutCancelled()
+                    return
+                }
+                val info = PrintDocumentInfo.Builder("$docName.pdf")
+                    .setContentType(PrintDocumentInfo.CONTENT_TYPE_DOCUMENT)
+                    .setPageCount(1)
+                    .build()
+                callback.onLayoutFinished(info, true)
+            }
+
+            override fun onWrite(
+                pages: Array<out PageRange>?,
+                destination: ParcelFileDescriptor,
+                cancellationSignal: CancellationSignal?,
+                callback: WriteResultCallback
+            ) {
+                val pdfDocument = PdfDocument()
+                try {
+                    val pageInfo = PdfDocument.PageInfo.Builder(595, 842, 1).create()
+                    val page = pdfDocument.startPage(pageInfo)
+                    val canvas = page.canvas
+
+                    val targetW = 340f
+                    val targetH = targetW / (1012f / 638f)
+                    val left = (595f - targetW) / 2f
+                    val top = (842f - targetH) / 2f
+                    val dstRect = RectF(left, top, left + targetW, top + targetH)
+
+                    val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+                    canvas.drawBitmap(bmp, null, dstRect, paint)
+
+                    val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                        textSize = 10f
+                        color = Color.DKGRAY
+                    }
+                    canvas.drawText("BIGsta Studio • $selectedType ID Card ($cardPreviewSide)", left, top - 12f, textPaint)
+
+                    pdfDocument.finishPage(page)
+                    java.io.FileOutputStream(destination.fileDescriptor).use {
+                        pdfDocument.writeTo(it)
+                    }
+                    callback.onWriteFinished(arrayOf(PageRange.ALL_PAGES))
+                } catch (e: Exception) {
+                    callback.onWriteFailed(e.localizedMessage)
+                } finally {
+                    pdfDocument.close()
+                }
+            }
+        }
+        printManager.print(docName, adapter, null)
     }
 
     Scaffold(
@@ -1477,7 +1552,16 @@ fun GovernmentFormsScreen(
                             Text("Export PNG", fontSize = 12.sp)
                         }
 
-                        if (onOpenStudio != null) {
+                        OutlinedButton(
+                            onClick = { printCardDirectly() },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(Icons.Default.Print, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Print Card", fontSize = 12.sp)
+                        }
+
+                        if (session.isAdmin && onOpenStudio != null) {
                             OutlinedButton(
                                 onClick = onOpenStudio,
                                 modifier = Modifier.weight(1f)

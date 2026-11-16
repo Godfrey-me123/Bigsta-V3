@@ -114,4 +114,41 @@ class AuthAndRoleSeparationTest {
         )
         assertTrue(invalidRef is ApiResult.Error)
     }
+
+    @Test
+    fun `TemplateRepository saveTemplate and deleteTemplate block non-admin users with 403`() = runTest {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val sessionManager = SessionManager(context)
+        sessionManager.saveSession(
+            UserSession(
+                accessToken = "jwt-user",
+                userId = "uid-user",
+                email = "user@example.com",
+                role = UserRole.USER,
+                roleVerifiedFromDb = true
+            )
+        )
+        val templateRepo = com.example.data.repositories.TemplateRepository(
+            restClient = SupabaseRestClient(context),
+            sessionManager = sessionManager,
+            cachedTemplateDao = object : com.example.core.database.CachedTemplateDao {
+                override fun observeAll(): kotlinx.coroutines.flow.Flow<List<com.example.core.database.CachedTemplateEntity>> =
+                    kotlinx.coroutines.flow.flowOf(emptyList())
+                override suspend fun upsertAll(items: List<com.example.core.database.CachedTemplateEntity>) {}
+                override suspend fun updateLocalPath(id: String, localPath: String) {}
+                override suspend fun deleteById(id: String) {}
+            }
+        )
+        val saveResult = templateRepo.saveTemplate(
+            name = "Test Card",
+            category = "NIDA",
+            side = "front"
+        )
+        assertTrue(saveResult is ApiResult.Error)
+        assertEquals(403, (saveResult as ApiResult.Error).statusCode)
+
+        val deleteResult = templateRepo.deleteTemplate("tmpl-123")
+        assertTrue(deleteResult is ApiResult.Error)
+        assertEquals(403, (deleteResult as ApiResult.Error).statusCode)
+    }
 }

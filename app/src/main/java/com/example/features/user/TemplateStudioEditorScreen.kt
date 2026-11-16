@@ -878,6 +878,61 @@ fun TemplateStudioEditorScreen(
         }.getOrNull()
     }
 
+    if (!session.isAdmin) {
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = { Text("Custom Card Studio") },
+                    navigationIcon = {
+                        IconButton(onClick = onBack) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        }
+                    }
+                )
+            }
+        ) { padding ->
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(20.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                SolidSectionCard {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.padding(12.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.AdminPanelSettings,
+                            contentDescription = null,
+                            modifier = Modifier.size(56.dp),
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                        Text(
+                            "Administrator Access Required",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 17.sp,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                        Text(
+                            "Custom Template Studio is strictly restricted to system administrators for creating and modifying master card layouts. Non-admin users cannot access or edit card templates.",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Button(onClick = onBack) {
+                            Text("Return to Dashboard")
+                        }
+                    }
+                }
+            }
+        }
+        return
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -907,7 +962,7 @@ fun TemplateStudioEditorScreen(
                         Icon(Icons.Default.Code, contentDescription = "JSON Tools")
                     }
 
-                    // Cloud Database Publish / Sync (Admin & User)
+                    // Publish Master Template to Cloud (Administrator)
                     IconButton(
                         onClick = {
                             viewModel.saveStudioTemplate(

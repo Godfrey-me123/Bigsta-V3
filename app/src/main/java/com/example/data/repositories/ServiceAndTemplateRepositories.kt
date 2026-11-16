@@ -162,6 +162,12 @@ class TemplateRepository(
         layersJson: String = "[]"
     ): ApiResult<TemplateDto> {
         val session = sessionManager.currentSession()
+        if (!session.isAuthenticated) {
+            return ApiResult.Error("Authentication required.", statusCode = 401)
+        }
+        if (!session.isAdmin) {
+            return ApiResult.Error("Access Denied: Only verified administrators can create or modify master templates.", statusCode = 403)
+        }
         val safeName = name.trim().ifBlank { "$category Template" }
         val templateId = id?.takeIf { it.isNotBlank() } ?: "tpl_${System.currentTimeMillis()}"
 
@@ -231,6 +237,12 @@ class TemplateRepository(
 
     suspend fun deleteTemplate(templateId: String): ApiResult<Unit> {
         val session = sessionManager.currentSession()
+        if (!session.isAuthenticated) {
+            return ApiResult.Error("Authentication required.", statusCode = 401)
+        }
+        if (!session.isAdmin) {
+            return ApiResult.Error("Access Denied: Only verified administrators can delete master templates.", statusCode = 403)
+        }
         cachedTemplateDao.deleteById(templateId)
         if (session.isAuthenticated) {
             restClient.deleteRest(
@@ -247,7 +259,8 @@ class TemplateRepository(
         mimeType: String
     ): ApiResult<String> {
         val session = sessionManager.currentSession()
-        if (!session.isAuthenticated) return ApiResult.Error("Sign in required to upload backgrounds.")
+        if (!session.isAuthenticated) return ApiResult.Error("Sign in required to upload backgrounds.", statusCode = 401)
+        if (!session.isAdmin) return ApiResult.Error("Access Denied: Only verified administrators can upload template backgrounds.", statusCode = 403)
         val ext = if (mimeType.contains("png")) "png" else "jpg"
         val path = "templates/${session.userId}_${System.currentTimeMillis()}.$ext"
         return restClient.uploadStorageObject(
